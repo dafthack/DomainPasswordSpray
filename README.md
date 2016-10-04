@@ -4,7 +4,7 @@ DomainPasswordSpray is a tool written in PowerShell to perform a password spray 
 ##Quick Start Guide
 Open a PowerShell terminal from the Windows command line with 'powershell.exe -exec bypass'.
 
-Type 'Import-Module Invoke-DomainPasswordSpray.ps1'".
+Type 'Import-Module Invoke-DomainPasswordSpray.ps1'.
 
 The only option necessary to perform a password spray is either -Password for a single password or -PasswordList to attempt multiple sprays. When using the -PasswordList option Invoke-DomainPasswordSpray will attempt to gather the account lockout observation window from the domain and limit sprays to one per observation window to avoid locking out accounts.
 
