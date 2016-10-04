@@ -40,11 +40,11 @@ This command will automatically generate a list of users from the current user's
 
 .EXAMPLE
 
-C:\PS> Invoke-DomainPasswordSpray -UserList users.txt -PasswordList passlist.txt -OutFile
+C:\PS> Invoke-DomainPasswordSpray -UserList users.txt -PasswordList passlist.txt -OutFile sprayed-creds.txt
 
 Description
 -----------
-This command will use the userlist at users.txt and try to authenticate using each password in the passlist.txt file one at a time. It will automatically attempt to detect the domain's lockout observation window and restrict sprays to 1 attempt during each window.
+This command will use the userlist at users.txt and try to authenticate using each password in the passlist.txt file one at a time. It will automatically attempt to detect the domain's lockout observation window and restrict sprays to 1 attempt during each window. The results of the spray will be output to a file at sprayed-creds.txt.
 
 
 #>
