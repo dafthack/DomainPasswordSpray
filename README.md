@@ -2,7 +2,7 @@
 DomainPasswordSpray is a tool written in PowerShell to perform a password spray attack against users of a domain. By default it will automatically generate the userlist from the domain. BE VERY CAREFUL NOT TO LOCKOUT ACCOUNTS!
 
 ##Quick Start Guide
-Open a PowerShell terminal with 'powershell.exe -exec bypass'.
+Open a PowerShell terminal from the Windows command line with 'powershell.exe -exec bypass'.
 
 Type 'Import-Module Invoke-DomainPasswordSpray.ps1'".
 
