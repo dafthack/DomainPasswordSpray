@@ -17,3 +17,13 @@ The following command will use the userlist at users.txt and try to authenticate
 ```PowerShell
 Invoke-DomainPasswordSpray -UserList users.txt -PasswordList passlist.txt -OutFile sprayed-creds.txt
 ```
+
+###Invoke-DomainPasswordSpray Options
+```
+UserList          - Optional UserList parameter. This will be generated automatically if not specified.
+Password          - A single password that will be used to perform the password spray.
+PasswordList      - A list of passwords one per line to use for the password spray (Be very careful not to lockout accounts).
+OutFile           - A file to output the results to.
+
+```
+
