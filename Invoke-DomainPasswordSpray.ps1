@@ -173,8 +173,14 @@
             #Getting bad password counts and lst bad password time for each user
             $badcount = $user.Properties.badpwdcount
             $samaccountname = $user.Properties.samaccountname
-            $badpasswordtime = $user.Properties.badpasswordtime[0]
-        
+            try
+            {
+                $badpasswordtime = $user.Properties.badpasswordtime[0]
+            }
+            catch
+            {
+                continue
+            }
             $currenttime = Get-Date
             $lastbadpwd = [DateTime]::FromFileTime($badpasswordtime)
             $timedifference = ($currenttime - $lastbadpwd).TotalMinutes
