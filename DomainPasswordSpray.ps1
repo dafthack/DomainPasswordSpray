@@ -236,7 +236,7 @@ function Invoke-DomainPasswordSpray{
             }
             1 {"Cancelling the password spray."}
         }
-        #if the force flag is set we will not bother asking about proceeding with password spray.
+        # if the force flag is set we will not bother asking about proceeding with password spray.
         if($Force)
         {
             Write-Host -ForegroundColor Yellow "[*] Password spraying has begun."
@@ -349,7 +349,7 @@ Function Get-DomainUserList{
     {
         Try
         {
-            #Trying to use the current user's domain
+            # Trying to use the current user's domain
             $DomainObject =[System.DirectoryServices.ActiveDirectory.Domain]::GetCurrentDomain()
             $CurrentDomain = "LDAP://" + ([ADSI]"").distinguishedName
         }
@@ -388,7 +388,7 @@ Function Get-DomainUserList{
                 $PSOLockoutThreshold = $PSOFineGrainedPolicy.'msds-lockoutthreshold'
                 $PSOAppliesTo = $PSOFineGrainedPolicy.'msds-psoappliesto'
                 $PSOMinPwdLength = $PSOFineGrainedPolicy.'msds-minimumpasswordlength'
-                #adding lockout threshold to array for use later to determine which is the lowest.
+                # adding lockout threshold to array for use later to determine which is the lowest.
                 $AccountLockoutThresholds += $PSOLockoutThreshold
 
             Write-Host "[*] Fine-Grained Password Policy titled: $PSOPolicyName has a Lockout Threshold of $PSOLockoutThreshold attempts, minimum password length of $PSOMinPwdLength chars, and applies to $PSOAppliesTo.`r`n"
@@ -447,7 +447,7 @@ Function Get-DomainUserList{
             Write-Host -ForegroundColor "yellow" "[*] Removing users within 1 attempt of locking out from list."
             Foreach ($user in $AllUserObjects)
             {
-                #Getting bad password counts and lst bad password time for each user
+                # Getting bad password counts and lst bad password time for each user
                 $badcount = $user.Properties.badpwdcount
                 $samaccountname = $user.Properties.samaccountname
                 try
