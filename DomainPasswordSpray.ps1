@@ -498,16 +498,19 @@ Function Get-DomainUserList{
         $UserSearcher.PropertiesToLoad.Add("badpasswordtime") > $Null
         
         If ($RemoveDisabled){
-        Write-Host -ForegroundColor "yellow" "[*] Removing disabled users from list."
-        #samAccountType of 805306368 only returns valid user objects. userAccountControl objects 514, 530, 546, 66050, 262658, and 8389122 are variations of disabled accounts. (Credit to Sally Vandeven @sallyvdv for those. Thanks Sally!)
-        $UserSearcher.filter = "(&(samAccountType=805306368)(!userAccountControl=514)(!userAccountControl=530)(!userAccountControl=546)(!userAccountControl=66050)(!userAccountControl=262658)(!userAccountControl=8389122))"
+                Write-Host -ForegroundColor "yellow" "[*] Removing disabled users from list."
+                # more precise LDAP filter UAC check for users that are disabled (Joff Thyer)
+                $UserSearcher.filter = "(&(objectCategory=person)(objectClass=user)(!userAccountControl:1.2.840.113556.1.4.803:=2))"
         }
         else
         {
-        $UserSearcher.filter = "(samAccountType=805306368)"
+                $UserSearcher.filter = "(&(objectCategory=person)(objectClass=user))"
         }
-        
+
+        # grab batches of 1000 in results
+        $UserSearcher.PageSize = 1000
         $AllUserObjects = $UserSearcher.FindAll()
+        Write-Host -ForegroundColor "yellow" ("[*] There are " + $AllUserObjects.count + " total users found.")
         $UserListArray = @()
         
         If ($RemovePotentialLockouts)
