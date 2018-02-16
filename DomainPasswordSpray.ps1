@@ -330,11 +330,11 @@ Function Get-DomainUserList{
      $RemovePotentialLockouts
     )
 
-   if ($Domain -ne "")
+    if ($Domain -ne "")
     {
         Try
         {
-            #Using domain specified with -Domain option
+            # Using domain specified with -Domain option
             $DomainContext = New-Object System.DirectoryServices.ActiveDirectory.DirectoryContext("domain",$Domain)
             $DomainObject =[System.DirectoryServices.ActiveDirectory.Domain]::GetDomain($DomainContext)
             $CurrentDomain = "LDAP://" + ([ADSI]"LDAP://$Domain").distinguishedName
@@ -426,7 +426,10 @@ Function Get-DomainUserList{
             Write-Host -ForegroundColor "yellow" "[*] Removing disabled users from list."
             # More precise LDAP filter UAC check for users that are disabled (Joff Thyer)
             # LDAP 1.2.840.113556.1.4.803 means bitwise &
-            $UserSearcher.filter = "(&(objectCategory=person)(objectClass=user)(!userAccountControl:1.2.840.113556.1.4.803:=2))"
+            # uac 0x2 is ACCOUNTDISABLE
+            # uac 0x10 is LOCKOUT
+            # See http://jackstromberg.com/2013/01/useraccountcontrol-attributeflag-values/
+            $UserSearcher.filter = "(&(objectCategory=person)(objectClass=user)(!userAccountControl:1.2.840.113556.1.4.803:=18))"
         }
         else
         {
