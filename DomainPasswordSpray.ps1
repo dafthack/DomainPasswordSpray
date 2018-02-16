@@ -174,7 +174,7 @@ function Invoke-DomainPasswordSpray{
 
         $result = $host.ui.PromptForChoice($title, $message, $options, 0)
 
-        If ($result != 0)
+        If ($result -ne 0)
         {
             Write-Host "Cancelling the password spray."
             break
