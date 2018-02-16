@@ -360,16 +360,16 @@ Function Get-DomainUserList{
         }
     }
 
-    #Setting the current domain's account lockout threshold
+    # Setting the current domain's account lockout threshold
     $objDeDomain = [ADSI] "LDAP://$($DomainObject.PDCRoleOwner)"
     $AccountLockoutThresholds = @()
     $AccountLockoutThresholds += $objDeDomain.Properties.lockoutthreshold
 
-    #Getting the AD behavior version to determine if fine-grained password policies are possible
+    # Getting the AD behavior version to determine if fine-grained password policies are possible
     $behaviorversion = [int] $objDeDomain.Properties['msds-behavior-version'].item(0)
     if ($behaviorversion -ge 3)
     {
-        #Determine if there are any fine-grained password policies
+        # Determine if there are any fine-grained password policies
         Write-Host "[*] Current domain is compatible with Fine-Grained Password Policy."
         $ADSearcher = New-Object System.DirectoryServices.DirectorySearcher
         $ADSearcher.SearchRoot = $objDeDomain
@@ -381,7 +381,8 @@ Function Get-DomainUserList{
             Write-Host -foregroundcolor "yellow" ("[*] A total of " + $PSOs.count + " Fine-Grained Password policies were found.`r`n")
             foreach($entry in $PSOs)
             {
-                #Selecting the lockout threshold, min pwd length, and which groups the fine-grained password policy applies to
+                # Selecting the lockout threshold, min pwd length, and which
+                # groups the fine-grained password policy applies to
                 $PSOFineGrainedPolicy = $entry | Select-Object -ExpandProperty Properties
                 $PSOPolicyName = $PSOFineGrainedPolicy.name
                 $PSOLockoutThreshold = $PSOFineGrainedPolicy.'msds-lockoutthreshold'
@@ -398,8 +399,9 @@ Function Get-DomainUserList{
 
         $observation_window = Get-ObservationWindow
 
-        #Generate a userlist from the domain
-        #Selecting the lowest account lockout threshold in the domain to avoid locking out any accounts.
+        # Generate a userlist from the domain
+        # Selecting the lowest account lockout threshold in the domain to avoid
+        # locking out any accounts.
         [int]$SmallestLockoutThreshold = $AccountLockoutThresholds | sort | Select -First 1
         Write-Host -ForegroundColor "yellow" "[*] Now creating a list of users to spray..."
 
@@ -421,13 +423,14 @@ Function Get-DomainUserList{
         $UserSearcher.PropertiesToLoad.Add("badpasswordtime") > $Null
 
         If ($RemoveDisabled){
-                Write-Host -ForegroundColor "yellow" "[*] Removing disabled users from list."
-                # more precise LDAP filter UAC check for users that are disabled (Joff Thyer)
-                $UserSearcher.filter = "(&(objectCategory=person)(objectClass=user)(!userAccountControl:1.2.840.113556.1.4.803:=2))"
+            Write-Host -ForegroundColor "yellow" "[*] Removing disabled users from list."
+            # More precise LDAP filter UAC check for users that are disabled (Joff Thyer)
+            # LDAP 1.2.840.113556.1.4.803 means bitwise &
+            $UserSearcher.filter = "(&(objectCategory=person)(objectClass=user)(!userAccountControl:1.2.840.113556.1.4.803:=2))"
         }
         else
         {
-                $UserSearcher.filter = "(&(objectCategory=person)(objectClass=user))"
+            $UserSearcher.filter = "(&(objectCategory=person)(objectClass=user))"
         }
 
         # grab batches of 1000 in results
@@ -438,8 +441,8 @@ Function Get-DomainUserList{
 
         If ($RemovePotentialLockouts)
         {
-        Write-Host -ForegroundColor "yellow" "[*] Removing users within 1 attempt of locking out from list."
-        Foreach ($user in $AllUserObjects)
+            Write-Host -ForegroundColor "yellow" "[*] Removing users within 1 attempt of locking out from list."
+            Foreach ($user in $AllUserObjects)
             {
                 #Getting bad password counts and lst bad password time for each user
                 $badcount = $user.Properties.badpwdcount
@@ -461,7 +464,7 @@ Function Get-DomainUserList{
 
                     [int]$userbadcount = [convert]::ToInt32($badcount, 10)
                     $attemptsuntillockout = $SmallestLockoutThreshold - $userbadcount
-                    #if there is more than 1 attempt left before a user locks out or if the time since the last failed login is greater than the domain observation window add user to spray list
+                    # if there is more than 1 attempt left before a user locks out or if the time since the last failed login is greater than the domain observation window add user to spray list
                     if (($timedifference -gt $observation_window) -Or ($attemptsuntillockout -gt 1))
                     {
                         $UserListArray += $samaccountname
@@ -471,13 +474,13 @@ Function Get-DomainUserList{
         }
         else
         {
-        Foreach ($user in $AllUserObjects)
+            Foreach ($user in $AllUserObjects)
             {
-            $samaccountname = $user.Properties.samaccountname
-            $UserListArray += $samaccountname
+                $samaccountname = $user.Properties.samaccountname
+                $UserListArray += $samaccountname
             }
         }
 
-            Write-Host -foregroundcolor "yellow" ("[*] Created a userlist containing " + $UserListArray.count + " users gathered from the current user's domain")
-            return $UserListArray
+        Write-Host -foregroundcolor "yellow" ("[*] Created a userlist containing " + $UserListArray.count + " users gathered from the current user's domain")
+        return $UserListArray
 }
