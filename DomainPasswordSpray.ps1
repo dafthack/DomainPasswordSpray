@@ -185,7 +185,7 @@ function Invoke-DomainPasswordSpray{
 
     ForEach($Password_Item in $Passwords)
     {
-        TestPassword($CurrentDomain, $UserListArray, $Password_Item)
+        Invoke-SpraySinglePassword($CurrentDomain, $UserListArray, $Password_Item)
         Countdown-Timer -Seconds (60*$observation_window)
     }
     Write-Host -ForegroundColor Yellow "[*] Password spraying is complete"
@@ -426,7 +426,7 @@ Function Get-DomainUserList{
     return $UserListArray
 }
 
-function TestPassword($CurrentDomain, $UserListArray, $Password)
+function Invoke-SpraySinglePassword($CurrentDomain, $UserListArray, $Password)
 {
     $time = Get-Date
     $count = $UserListArray.count
