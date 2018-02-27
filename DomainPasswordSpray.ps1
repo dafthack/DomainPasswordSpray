@@ -80,6 +80,10 @@ function Invoke-DomainPasswordSpray{
 
      [Parameter(Position = 4, Mandatory = $false)]
      [string]
+     $Filter = "",
+
+     [Parameter(Position = 4, Mandatory = $false)]
+     [string]
      $Domain = "",
 
      [Parameter(Position = 5, Mandatory = $false)]
