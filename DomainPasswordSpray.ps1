@@ -266,7 +266,7 @@ function Get-DomainUserList{
 
      [Parameter(Position = 2, Mandatory = $false)]
      [switch]
-     $RemovePotentialLockouts
+     $RemovePotentialLockouts,
 
      [Parameter(Position = 2, Mandatory = $false)]
      [string]
