@@ -444,7 +444,7 @@ function Invoke-SpraySinglePassword
             $Password,
             [Parameter(Position=4)]
             [string]
-            $OutFile,
+            $OutFile
 
     )
     $time = Get-Date
