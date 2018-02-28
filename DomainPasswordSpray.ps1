@@ -435,7 +435,6 @@ function Invoke-SpraySinglePassword
 {
     param(
             [Parameter(Position=1)]
-            [string]
             $CurrentDomain,
             [Parameter(Position=2)]
             [string]
