@@ -211,7 +211,7 @@ function Countdown-Timer
     Write-Progress -Id 1 -Activity $Message -Status "Completed" -PercentComplete 100 -Completed
 }
 
-function Get-DomainUserList(
+function Get-DomainUserList
 {
 <#
     .SYNOPSIS
@@ -274,7 +274,7 @@ function Get-DomainUserList(
      [switch]
      $RemovePotentialLockouts,
 
-     [Parameter(Position = 2, Mandatory = $false)]
+     [Parameter(Position = 3, Mandatory = $false)]
      [string]
      $Filter
     )
