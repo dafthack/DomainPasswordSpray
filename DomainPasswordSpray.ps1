@@ -380,12 +380,18 @@ function Get-DomainUserList
         # uac 0x10 is LOCKOUT
         # See http://jackstromberg.com/2013/01/useraccountcontrol-attributeflag-values/
         $UserSearcher.filter =
-            "(&(objectCategory=person)(objectClass=user)(!userAccountControl:1.2.840.113556.1.4.803:=18)$Filter)"
+            "(&(objectCategory=person)(objectClass=user)(!userAccountControl:1.2.840.113556.1.4.803:=16)(!userAccountControl:1.2.840.113556.1.4.803:=2)$Filter)"
     }
     else
     {
         $UserSearcher.filter = "(&(objectCategory=person)(objectClass=user)$Filter)"
     }
+
+    $UserSearcher.PropertiesToLoad.add("samaccountname")
+    $UserSearcher.PropertiesToLoad.add("lockouttime")
+    $UserSearcher.PropertiesToLoad.add("badpwdcount")
+    $UserSearcher.PropertiesToLoad.add("badpasswordtime")
+
     Write-Host $UserSearcher.filter
 
     # grab batches of 1000 in results
