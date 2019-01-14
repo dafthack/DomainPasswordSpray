@@ -43,7 +43,7 @@ function Invoke-DomainPasswordSpray{
     Forces the spray to continue and doesn't prompt for confirmation.
 
     .PARAMETER UsernameAsPassword
-    
+
     For each user, will try that user's name as their password
 
     .EXAMPLE
@@ -65,7 +65,7 @@ function Invoke-DomainPasswordSpray{
     .EXAMPLE
 
     C:\PS> Invoke-DomainPasswordSpray -UsernameAsPassword -OutFile valid-creds.txt
-    
+
     Description
     -----------
     This command will automatically generate a list of users from the current user's domain and attempt to authenticate as each user by using their username as their password. Any valid credentials will be saved to valid-creds.txt
@@ -101,13 +101,13 @@ function Invoke-DomainPasswordSpray{
      $Force,
 
      [Parameter(Position = 7, Mandatory = $false)]
-     [switch]     
+     [switch]
      $UsernameAsPassword,
 
      [Parameter(Position = 8, Mandatory = $false)]
      [int]
      $Delay=0,
-     
+
      [Parameter(Position = 9, Mandatory = $false)]
      $Jitter=0
 
@@ -176,7 +176,7 @@ function Invoke-DomainPasswordSpray{
     }
 
 
-    if ($Passwords.count > 1)
+    if ($Passwords.count -gt 1)
     {
         Write-Host -ForegroundColor Yellow "[*] WARNING - Be very careful not to lock out accounts with the password list option!"
     }
@@ -226,7 +226,7 @@ function Invoke-DomainPasswordSpray{
             }
         }
     }
-    
+
     Write-Host -ForegroundColor Yellow "[*] Password spraying is complete"
     if ($OutFile -ne "")
     {
