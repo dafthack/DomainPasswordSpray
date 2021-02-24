@@ -181,7 +181,7 @@ function Invoke-DomainPasswordSpray{
         Write-Host -ForegroundColor Yellow "[*] WARNING - Be very careful not to lock out accounts with the password list option!"
     }
 
-    $observation_window = Get-ObservationWindow
+    $observation_window = Get-ObservationWindow $CurrentDomain
 
     Write-Host -ForegroundColor Yellow "[*] The domain password policy observation window is set to $observation_window minutes."
     Write-Host "[*] Setting a $observation_window minute wait in between sprays."
@@ -374,7 +374,7 @@ function Get-DomainUserList
         }
     }
 
-    $observation_window = Get-ObservationWindow
+    $observation_window = Get-ObservationWindow $CurrentDomain
 
     # Generate a userlist from the domain
     # Selecting the lowest account lockout threshold in the domain to avoid
@@ -531,16 +531,11 @@ function Invoke-SpraySinglePassword
 
 }
 
-function Get-ObservationWindow()
+function Get-ObservationWindow($DomainEntry)
 {
     # Get account lockout observation window to avoid running more than 1
     # password spray per observation window.
-    $command = "cmd.exe /C net accounts /domain"
-    $net_accounts_results = Invoke-Expression -Command:$command
-    $stripped_policy = ($net_accounts_results | Where-Object {$_ -like "*Lockout Observation Window*"})
-    $stripped_split_a, $stripped_split_b = $stripped_policy.split(':',2)
-    $observation_window_no_spaces = $stripped_split_b -Replace '\s+',""
-    [int]$observation_window = [convert]::ToInt32($observation_window_no_spaces, 10)
+    $lockObservationWindow_attr = $DomainEntry.Properties['lockoutObservationWindow']
+    $observation_window = $DomainEntry.ConvertLargeIntegerToInt64($lockObservationWindow_attr.Value) / -600000000
     return $observation_window
 }
-
