@@ -418,7 +418,7 @@ function Get-DomainUserList
     $UserSearcher.PropertiesToLoad.add("samaccountname") > $Null
     $UserSearcher.PropertiesToLoad.add("lockouttime") > $Null
     $UserSearcher.PropertiesToLoad.add("badpwdcount") > $Null
-    $UserSearcher.PropertiesToLoad.add("badpasswordtime") > $Nulll
+    $UserSearcher.PropertiesToLoad.add("badpasswordtime") > $Null
 
     #Write-Host $UserSearcher.filter
 
