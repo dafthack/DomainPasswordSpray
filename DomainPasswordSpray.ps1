@@ -535,7 +535,11 @@ function Get-ObservationWindow($DomainEntry)
 {
     # Get account lockout observation window to avoid running more than 1
     # password spray per observation window.
-    $lockObservationWindow_attr = $DomainEntry.Properties['lockoutObservationWindow']
-    $observation_window = $DomainEntry.ConvertLargeIntegerToInt64($lockObservationWindow_attr.Value) / -600000000
-    return $observation_window
+	$RootDSE = Get-ADRootDSE -Server $env:USERDNSDOMAIN
+    $lockObservationWindow_attr = Get-ADObject $RootDSE.defaultNamingContext -Property lockoutObservationWindow | select-object -expand lockoutObservationwindow
+	$lockObservationWindow_attr = -$lockObservationWindow_attr
+	$lockObservationWindow_attr = $lockObservationWindow_attr / 60 / 10000000
+
+	$observation_window = $lockObservationWindow_attr
+	return $observation_window
 }
