@@ -186,7 +186,7 @@ function Invoke-DomainPasswordSpray{
 
     Write-Host -ForegroundColor Yellow "[*] The domain password policy observation window is set to $observation_window minutes."
 
-    if ($Passwords.count -gt 1)
+    if ($Passwords.count -gt 1) {
         Write-Host -ForegroundColor Yellow "[*] WARNING - Be very careful not to lock out accounts with the password list option!"
         Write-Host "[*] Setting a $observation_window minute wait in between sprays."
     }
