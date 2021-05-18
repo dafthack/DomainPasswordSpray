@@ -521,7 +521,10 @@ function Invoke-SpraySinglePassword
     $count = $UserListArray.count
     Write-Host "[*] Now trying password $Password against $count users. Current time is $($time.ToShortTimeString())"
     $curr_user = 0
-    Write-Host -ForegroundColor Yellow "[*] Writing successes to $OutFile"
+    if ($OutFile -ne "")
+    {
+        Write-Host -ForegroundColor Yellow "[*] Writing successes to $OutFile"
+    }
     $RandNo = New-Object System.Random
 
     foreach ($User in $UserListArray)
