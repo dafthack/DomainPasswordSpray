@@ -181,17 +181,15 @@ function Invoke-DomainPasswordSpray{
         }
 
     }
-
-
-    if ($Passwords.count -gt 1)
-    {
-        Write-Host -ForegroundColor Yellow "[*] WARNING - Be very careful not to lock out accounts with the password list option!"
-    }
-
+    
     $observation_window = Get-ObservationWindow $CurrentDomain
 
     Write-Host -ForegroundColor Yellow "[*] The domain password policy observation window is set to $observation_window minutes."
-    Write-Host "[*] Setting a $observation_window minute wait in between sprays."
+
+    if ($Passwords.count -gt 1)
+        Write-Host -ForegroundColor Yellow "[*] WARNING - Be very careful not to lock out accounts with the password list option!"
+        Write-Host "[*] Setting a $observation_window minute wait in between sprays."
+    }
 
     # if no force flag is set we will ask if the user is sure they want to spray
     if (!$Force)
