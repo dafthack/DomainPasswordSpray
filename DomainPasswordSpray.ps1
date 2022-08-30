@@ -258,7 +258,7 @@ function Countdown-Timer
     )
     if ($quiet)
     {
-        Write-Host "$Message: Waiting for $($Seconds/60) minutes. $($Seconds - $Count)"
+        Write-Host "$($Message): Waiting for $($Seconds/60) minutes. $($Seconds - $Count)"
         Start-Sleep -Seconds $Seconds
     } else {
         foreach ($Count in (1..$Seconds))
@@ -414,7 +414,7 @@ function Get-DomainUserList
     }
 
     $UserSearcher = New-Object System.DirectoryServices.DirectorySearcher([ADSI]$CurrentDomain)
-    $DirEntry = New-Object System.DirectoryServices.DirectoryEntry
+    $DirEntry = New-Object System.DirectoryServices.DirectoryEntry($CurrentDomain)
     $UserSearcher.SearchRoot = $DirEntry
 
     $UserSearcher.PropertiesToLoad.Add("samaccountname") > $Null
@@ -464,6 +464,8 @@ function Get-DomainUserList
             }
             catch
             {
+                if($badcount -eq "null")
+                $UserListArray += $samaccountname
                 continue
             }
             $currenttime = Get-Date
@@ -530,7 +532,7 @@ function Invoke-SpraySinglePassword
     $curr_user = 0
     if ($OutFile -ne ""-and -not $Quiet)
     {
-        Write-Host -ForegroundColor Yellow "[*] Writing successes to $OutFile"    
+        Write-Host -ForegroundColor Yellow "[*] Writing successes to $OutFile"
     }
     $RandNo = New-Object System.Random
 
@@ -566,6 +568,7 @@ function Get-ObservationWindow($DomainEntry)
 {
     # Get account lockout observation window to avoid running more than 1
     # password spray per observation window.
+    $DomainEntry = [ADSI]$DomainEntry
     $lockObservationWindow_attr = $DomainEntry.Properties['lockoutObservationWindow']
     $observation_window = $DomainEntry.ConvertLargeIntegerToInt64($lockObservationWindow_attr.Value) / -600000000
     return $observation_window
