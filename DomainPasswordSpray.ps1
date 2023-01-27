@@ -258,7 +258,7 @@ function Countdown-Timer
     )
     if ($quiet)
     {
-        Write-Host "$Message: Waiting for $($Seconds/60) minutes. $($Seconds - $Count)"
+        Write-Host "${Message}: Waiting for $($Seconds/60) minutes. $($Seconds - $Count)"
         Start-Sleep -Seconds $Seconds
     } else {
         foreach ($Count in (1..$Seconds))
