@@ -196,7 +196,7 @@ function Invoke-DomainPasswordSpray{
         Write-Host -ForegroundColor Yellow "[*] WARNING - Be very careful not to lock out accounts with the password list option!"
     }
 
-    $observation_window = Get-ObservationWindow $CurrentDomain
+    $observation_window = Get-ObservationWindowForLockouts $CurrentDomain
 
     Write-Host -ForegroundColor Yellow "[*] The domain password policy observation window is set to $observation_window minutes."
     Write-Host "[*] Setting a $observation_window minute wait in between sprays."
@@ -396,7 +396,7 @@ function Get-DomainUserList
         }
     }
 
-    $observation_window = Get-ObservationWindow $CurrentDomain
+    $observation_window = Get-ObservationWindowForLockouts $CurrentDomain
 
     # Generate a userlist from the domain
     # Selecting the lowest account lockout threshold in the domain to avoid
