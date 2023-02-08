@@ -570,5 +570,3 @@ Function Get-ObservationWindowForLockouts($Domain)
 
     return $observationWindowInSeconds
 }
-
-}
