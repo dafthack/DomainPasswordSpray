@@ -562,7 +562,7 @@ function Invoke-SpraySinglePassword
 
 }
 
-Function Get-ObservationWindowForLockouts $Domain
+Function Get-ObservationWindowForLockouts($Domain)
 {
     # Get the account lockout observation window to prevent more than one password spray during the observation period.
     $domainPolicy = Get-ADDefaultDomainPasswordPolicy -Identity $Domain
