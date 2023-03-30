@@ -560,7 +560,7 @@ function Invoke-SpraySinglePassword
         }
     }
 
-}
+
 
 Function Get-ObservationWindowForLockouts($Domain)
 {
@@ -574,4 +574,4 @@ Function Get-ObservationWindowForLockouts($Domain)
 
     return $observationWindowInSeconds
 }
-
+}
