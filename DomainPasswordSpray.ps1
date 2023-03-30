@@ -570,7 +570,7 @@ Function Get-ObservationWindowForLockouts
         return $null
     }
 
-    $observationWindowInSeconds = $domainPolicy.LockoutObservationWindow.TotalSeconds
+    $observationWindowInMinutes = $domainPolicy.LockoutObservationWindow.Minutes
 
-    return $observationWindowInSeconds
+    return $observationWindowInMinutes
 }
