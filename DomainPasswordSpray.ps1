@@ -559,10 +559,10 @@ function Invoke-SpraySinglePassword
             Start-Sleep -Seconds $RandNo.Next((1-$Jitter)*$Delay, (1+$Jitter)*$Delay)
         }
     }
+}
 
 
-
-Function Get-ObservationWindowForLockouts($Domain)
+Function Get-ObservationWindowForLockouts
 {
     # Get the account lockout observation window to prevent more than one password spray during the observation period.
     $domainPolicy = Get-ADDefaultDomainPasswordPolicy -Identity $Domain
@@ -573,5 +573,4 @@ Function Get-ObservationWindowForLockouts($Domain)
     $observationWindowInSeconds = $domainPolicy.LockoutObservationWindow.TotalSeconds
 
     return $observationWindowInSeconds
-}
 }
