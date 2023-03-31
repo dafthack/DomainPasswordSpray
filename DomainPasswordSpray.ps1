@@ -196,7 +196,7 @@ function Invoke-DomainPasswordSpray{
         Write-Host -ForegroundColor Yellow "[*] WARNING - Be very careful not to lock out accounts with the password list option!"
     }
 
-    $observation_window = Get-ObservationWindow $CurrentDomain
+    $observation_window = Get-ObservationWindowForLockouts $CurrentDomain
 
     Write-Host -ForegroundColor Yellow "[*] The domain password policy observation window is set to $observation_window minutes."
     Write-Host "[*] Setting a $observation_window minute wait in between sprays."
@@ -258,7 +258,7 @@ function Countdown-Timer
     )
     if ($quiet)
     {
-        Write-Host "$Message: Waiting for $($Seconds/60) minutes. $($Seconds - $Count)"
+        Write-Host "${Message: Waiting for $($Seconds/60) minutes. $($Seconds - $Count)}"
         Start-Sleep -Seconds $Seconds
     } else {
         foreach ($Count in (1..$Seconds))
@@ -396,7 +396,7 @@ function Get-DomainUserList
         }
     }
 
-    $observation_window = Get-ObservationWindow $CurrentDomain
+    $observation_window = Get-ObservationWindowForLockouts $CurrentDomain
 
     # Generate a userlist from the domain
     # Selecting the lowest account lockout threshold in the domain to avoid
@@ -559,14 +559,18 @@ function Invoke-SpraySinglePassword
             Start-Sleep -Seconds $RandNo.Next((1-$Jitter)*$Delay, (1+$Jitter)*$Delay)
         }
     }
-
 }
 
-function Get-ObservationWindow($DomainEntry)
+
+Function Get-ObservationWindowForLockouts
 {
-    # Get account lockout observation window to avoid running more than 1
-    # password spray per observation window.
-    $lockObservationWindow_attr = $DomainEntry.Properties['lockoutObservationWindow']
-    $observation_window = $DomainEntry.ConvertLargeIntegerToInt64($lockObservationWindow_attr.Value) / -600000000
-    return $observation_window
+    # Get the account lockout observation window to prevent more than one password spray during the observation period.
+    $domainPolicy = Get-ADDefaultDomainPasswordPolicy -Identity $Domain
+    if ($domainPolicy.LockoutObservationWindow -eq $null) {
+        return $null
+    }
+
+    $observationWindowInMinutes = $domainPolicy.LockoutObservationWindow.Minutes
+
+    return $observationWindowInMinutes
 }
