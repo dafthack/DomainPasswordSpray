@@ -448,7 +448,7 @@ function Get-DomainUserList
     $UserSearcher.PageSize = 1000
     $AllUserObjects = $UserSearcher.FindAll()
     Write-Host -ForegroundColor "yellow" ("[*] There are " + $AllUserObjects.count + " total users found.")
-    $UserListArray = @()
+    $UserListArray = [System.Collections.Generic.List[String]]::new()
 
     if ($RemovePotentialLockouts)
     {
@@ -479,7 +479,7 @@ function Get-DomainUserList
                 # observation window add user to spray list
                 if (($timedifference -gt $observation_window) -or ($attemptsuntillockout -gt 1))
                                 {
-                    $UserListArray += $samaccountname
+                    $UserListArray.Add($samaccountname)
                 }
             }
         }
@@ -489,7 +489,7 @@ function Get-DomainUserList
         foreach ($user in $AllUserObjects)
         {
             $samaccountname = $user.Properties.samaccountname
-            $UserListArray += $samaccountname
+            $UserListArray.Add($samaccountname)
         }
     }
 
