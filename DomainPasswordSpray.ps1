@@ -450,7 +450,8 @@ function Get-DomainUserList
     Write-Host -ForegroundColor "yellow" ("[*] There are " + $AllUserObjects.count + " total users found.")
     $UserListArray = [System.Collections.Generic.List[String]]::new()
 
-    if ($RemovePotentialLockouts)
+    # Only if flag is present and lockout policy is set on domain
+    if ($RemovePotentialLockouts -and $AccountLockoutThresholds -ne 0)
     {
         Write-Host -ForegroundColor "yellow" "[*] Removing users within 1 attempt of locking out from list."
         foreach ($user in $AllUserObjects)
