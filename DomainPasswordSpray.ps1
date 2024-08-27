@@ -37,6 +37,10 @@ function Invoke-DomainPasswordSpray{
     .PARAMETER Filter
 
     Custom LDAP filter for users, e.g. "(description=*admin*)"
+	
+	.PARAMETER SearchBase
+
+    Optional LDAP SearchBase parameter.
 
     .PARAMETER Force
 
@@ -99,31 +103,35 @@ function Invoke-DomainPasswordSpray{
      [Parameter(Position = 4, Mandatory = $false)]
      [string]
      $Filter = "",
+	 
+	 [Parameter(Position = 5, Mandatory = $false)]
+     [string]
+     $SearchBase = "",
 
-     [Parameter(Position = 5, Mandatory = $false)]
+     [Parameter(Position = 6, Mandatory = $false)]
      [string]
      $Domain = "",
 
-     [Parameter(Position = 6, Mandatory = $false)]
+     [Parameter(Position = 7, Mandatory = $false)]
      [switch]
      $Force,
 
-     [Parameter(Position = 7, Mandatory = $false)]
+     [Parameter(Position = 8, Mandatory = $false)]
      [switch]
      $UsernameAsPassword,
 
-     [Parameter(Position = 8, Mandatory = $false)]
+     [Parameter(Position = 9, Mandatory = $false)]
      [int]
      $Delay=0,
 
-     [Parameter(Position = 9, Mandatory = $false)]
+     [Parameter(Position = 10, Mandatory = $false)]
      $Jitter=0,
 
-     [Parameter(Position = 10, Mandatory = $false)]
+     [Parameter(Position = 11, Mandatory = $false)]
      [switch]
      $Quiet,
 
-     [Parameter(Position = 11, Mandatory = $false)]
+     [Parameter(Position = 12, Mandatory = $false)]
      [int]
      $Fudge=10
     )
@@ -414,7 +422,14 @@ function Get-DomainUserList
     }
 
     $UserSearcher = New-Object System.DirectoryServices.DirectorySearcher([ADSI]$CurrentDomain)
-    $DirEntry = New-Object System.DirectoryServices.DirectoryEntry
+    if ($SearchBase)
+    {
+    	$DirEntry = New-Object System.DirectoryServices.DirectoryEntry("LDAP://$SearchBase")
+    }
+    else
+    {
+    	$DirEntry = New-Object System.DirectoryServices.DirectoryEntry
+    }
     $UserSearcher.SearchRoot = $DirEntry
 
     $UserSearcher.PropertiesToLoad.Add("samaccountname") > $Null
