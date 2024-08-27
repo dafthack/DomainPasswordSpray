@@ -422,7 +422,14 @@ function Get-DomainUserList
     }
 
     $UserSearcher = New-Object System.DirectoryServices.DirectorySearcher([ADSI]$CurrentDomain)
-	$DirEntry = New-Object System.DirectoryServices.DirectoryEntry("LDAP://$SearchBase")
+    if ($SearchBase)
+    {
+    	$DirEntry = New-Object System.DirectoryServices.DirectoryEntry("LDAP://$SearchBase")
+    }
+    else
+    {
+    	$DirEntry = New-Object System.DirectoryServices.DirectoryEntry
+    }
     $UserSearcher.SearchRoot = $DirEntry
 
     $UserSearcher.PropertiesToLoad.Add("samaccountname") > $Null
